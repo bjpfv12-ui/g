@@ -254,13 +254,18 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   // обычный try/catch не помогает. Ловим ошибку на уровне окна и пересоздаём
   // кузов: иначе машина теряет руль навсегда.
   useEffect(() => {
+    let lastRespawn = 0
     const onError = (event: ErrorEvent) => {
       const message = event.message ?? ''
-      if (!/recursive use|panic|wasm|NaN|float|unreachable/i.test(message)) return
+      if (!/recursive use|unreachable|panic|wasm trap|NaN/i.test(message)) return
       const carState = useCarStore.getState()
       if (!carState.isDriving || !carState.currentCarId) return
       const index = indexById.get(carState.currentCarId)
       if (index === undefined) return
+      // Ошибка повторяется каждый кадр — пересоздаём кузов не чаще раза в 3 с.
+      const now = performance.now()
+      if (now - lastRespawn < 3000) return
+      lastRespawn = now
       console.warn('[car] физика упала, пересоздаём кузов:', message)
       respawnCar(index)
     }
