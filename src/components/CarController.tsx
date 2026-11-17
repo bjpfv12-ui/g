@@ -244,6 +244,10 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   const steerLogUntil = useRef(0)
   /** Предыдущее положение руля — чтобы поймать новое нажатие. */
   const prevSteer = useRef(0)
+  /** С какого момента руль не отвечает (для сторожа в консоли). */
+  const deadSteerSince = useRef<number | null>(null)
+  /** Сообщение о мёртвом руле уже напечатано — повторяем не каждый кадр. */
+  const deadSteerReported = useRef(false)
 
   const setCarPrompt = useUiStore((state) => state.setCarPrompt)
 
@@ -530,7 +534,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         carDebug.angvel.z = angular.z
       }
 
-      // ─── Диагностика руля: 1 секунда лога при нажатии A/D (только DEV) ───
+      // ─── Сторож руля: если рулём нельзя провернуть кузов — говорим почему ──
       if (import.meta.env.DEV) {
         const now = performance.now()
         const pressed = steer !== 0 && prevSteer.current === 0
@@ -544,6 +548,33 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
               `цель ${targetYawRate.toFixed(3)} рад/с | направление ${direction} | ` +
               `полномочия ${authority.toFixed(2)}`,
           )
+        }
+
+        // Руль не отвечает: цель есть, а кузов не крутится дольше полусекунды.
+        if (Math.abs(targetYawRate) > 0.5 && Math.abs(angular.y) < 0.2) {
+          deadSteerSince.current ??= now
+          if (now - deadSteerSince.current > 500 && !deadSteerReported.current) {
+            deadSteerReported.current = true
+            console.warn(
+              '[car] РУЛЬ НЕ РАБОТАЕТ: цель',
+              targetYawRate.toFixed(3),
+              'рад/с, факт',
+              angular.y.toFixed(3),
+              '| тормоз:',
+              braking,
+              '| передача:',
+              direction,
+              '| скорость:',
+              playerState.speed.toFixed(2),
+              '| наклон up.y:',
+              playerState.carUpY.toFixed(2),
+              '| аварийных доворотов:',
+              carDebug.steer.unstuck,
+            )
+          }
+        } else {
+          deadSteerSince.current = null
+          deadSteerReported.current = false
         }
       }
 

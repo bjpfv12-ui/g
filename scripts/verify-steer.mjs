@@ -158,6 +158,11 @@ console.log(
     `${perSecond.map((v) => v.toFixed(0)).join(', ')}°/с | «мёртвых» секунд: ${deadSeconds}`,
 )
 
+// 7. Руль под тормозом: Space не должен отбирать поворот.
+await record(['KeyW'], 2000)
+const braking = await record(['KeyW', 'Space', 'KeyA'], 2500)
+summarize('7. Под тормозом: руль работает', braking, { expectSign: 1, minYawRate: 40 })
+
 const failed = results.filter((r) => !r.ok)
 
 // 6. Ось Y не заблокирована: эффективная инерция по Y должна быть не нулевой.
