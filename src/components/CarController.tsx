@@ -19,12 +19,16 @@ const MAX_REVERSE_SPEED = 8
 const ENGINE_ACCEL = 9
 /** Ускорение двигателя назад, м/с². */
 const REVERSE_ACCEL = 5
-/** Угловое ускорение при полном выкрученном руле, рад/с². */
-const STEER_ACCEL = 7
-/** Скорость, на которой руль работает в полную силу, м/с. */
-const STEER_FULL_SPEED = 6
-/** Минимум полномочий руля — на малой скорости машина всё равно должна крутиться. */
-const MIN_STEER_AUTHORITY = 0.4
+/**
+ * Максимальная скорость поворота кузова на малой скорости, рад/с.
+ * Кузов не должен раскручиваться волчком — иначе машину невозможно
+ * удержать на курсе.
+ */
+const MAX_YAW_RATE = 1.6
+/** На сколько метров в секунду падает разрешённый угол поворота. */
+const YAW_SPEED_FALLOFF = 12
+/** Насколько быстро кузов доворачивается до заданной скорости поворота, 1/с. */
+const STEER_RESPONSE = 6
 /** Скорость гашения бокового скольжения, 1/с. */
 const GRIP = 8
 /** Тормоз: доля скорости, снимаемая за секунду. */
@@ -340,28 +344,18 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       }
 
       // ─── Руль ─────────────────────────────────────────────────────────────
-      // Полномочия руля растут со скоростью, но на пешей скорости машина
-      // всё равно должна кое-как поворачивать.
-      const speedFactor = THREE.MathUtils.clamp(
-        Math.abs(forwardSpeed) / STEER_FULL_SPEED,
-        MIN_STEER_AUTHORITY,
-        1,
-      )
-      if (speedFactor > 0.01 && steer !== 0) {
-        // Момент инерции кузова вокруг вертикальной оси.
-        const inertia = (mass * (def.width * def.width + def.length * def.length)) / 12
-        // На заднем ходу руль работает наоборот.
-        const direction = forwardSpeed < 0 ? -1 : 1
-        const torque = steer * direction * STEER_ACCEL * speedFactor * inertia * dt
-        body.applyTorqueImpulse({ x: 0, y: torque, z: 0 }, true)
-      }
-
-      // ─── Затухание вращения, чтобы машина не крутилась волчком ──────────
-      if (Math.abs(angular.y) > 0.001) {
-        const inertia = (mass * (def.width * def.width + def.length * def.length)) / 12
-        const torque = -angular.y * inertia * ANGULAR_DAMP * dt
-        body.applyTorqueImpulse({ x: 0, y: torque, z: 0 }, true)
-      }
+      // Управляем не моментом, а целевой скоростью поворота кузова.
+      // Так руль сам возвращается в «прямо», а на большой скорости угол
+      // ограничивается — как в настоящей машине.
+      const yawLimit =
+        MAX_YAW_RATE / (1 + Math.abs(forwardSpeed) / YAW_SPEED_FALLOFF)
+      // На заднем ходу руль работает наоборот.
+      const direction = forwardSpeed < 0 ? -1 : 1
+      const targetYawRate = steer * direction * yawLimit * speedFactor
+      const inertia = (mass * (def.width * def.width + def.length * def.length)) / 12
+      const yawError = targetYawRate - angular.y
+      const torque = yawError * inertia * STEER_RESPONSE * dt
+      body.applyTorqueImpulse({ x: 0, y: torque, z: 0 }, true)
 
       // ─── Тормоз ───────────────────────────────────────────────────────────
       if (braking) {
