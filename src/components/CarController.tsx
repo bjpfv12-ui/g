@@ -252,6 +252,25 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   const respawnCar = useCallback((index: number) => {
     setRespawn((prev) => ({ ...prev, [index]: (prev[index] ?? 0) + 1 }))
   }, [])
+
+  // Аварийное восстановление. Если тело физики испорчено (NaN в скоростях),
+  // Rapier падает прямо на шаге физики — до блока руля кадр не доходит, и
+  // обычный try/catch не помогает. Ловим ошибку на уровне окна и пересоздаём
+  // кузов: иначе машина теряет руль навсегда.
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      const message = event.message ?? ''
+      if (!/recursive use|panic|wasm|NaN|float|unreachable/i.test(message)) return
+      const carState = useCarStore.getState()
+      if (!carState.isDriving || !carState.currentCarId) return
+      const index = indexById.get(carState.currentCarId)
+      if (index === undefined) return
+      console.warn('[car] физика упала, пересоздаём кузов:', message)
+      respawnCar(index)
+    }
+    window.addEventListener('error', onError)
+    return () => window.removeEventListener('error', onError)
+  }, [indexById, respawnCar])
   /** Направление руля: 1 — вперёд, -1 — назад. Меняется с запасом по скорости. */
   const steerDirection = useRef(1)
   /** Сколько секунд машина едет назад подряд — для переключения передачи. */
