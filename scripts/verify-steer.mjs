@@ -161,17 +161,17 @@ console.log(
 const failed = results.filter((r) => !r.ok)
 
 // 6. Ось Y не заблокирована: эффективная инерция по Y должна быть не нулевой.
-const inertiaY = await page.evaluate(() => {
+// Rapier хранит симметричную матрицу 3x3 в 6 элементах: [xx, xy, xz, yy, yz, zz].
+const inertia = await page.evaluate(() => {
   const b = window.__carState.body
-  const eff = b.effectiveAngularInertia()
-  const el = eff.elements
-  return { yy: el[4] ?? el.y ?? 0, principal: b.principalInertia().y }
+  const el = Array.from(b.effectiveAngularInertia().elements)
+  return { xx: el[0], yy: el[3], zz: el[5], principal: b.principalInertia().y }
 })
-const lockOk = inertiaY.yy > 0
+const lockOk = inertia.yy > 0 && inertia.xx === 0 && inertia.zz === 0
 results.push({ label: '6. Ось Y не заблокирована', ok: lockOk })
 console.log(
-  `${lockOk ? '✓' : '✗'} 6. Ось Y не заблокирована: эффективная инерция Y = ` +
-    `${inertiaY.yy.toFixed(3)} (принципиальная ${inertiaY.principal.toFixed(3)})`,
+  `${lockOk ? '✓' : '✗'} 6. Ось Y не заблокирована: инерция Y = ${inertia.yy.toFixed(3)} ` +
+    `(X = ${inertia.xx}, Z = ${inertia.zz} — заблокированы, машина не заваливается)`,
 )
 
 console.log(`\nИТОГ: ${results.length - failed.length}/${results.length} проверок пройдено`)
