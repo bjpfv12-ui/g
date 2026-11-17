@@ -66,10 +66,6 @@ const carDebug = {
     actual: 0,
     limit: 0,
     authority: 0,
-    friction: 0,
-    combine: 0,
-    inertia: 0,
-    mass: 0,
   },
 }
 
@@ -389,13 +385,6 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         carDebug.steer.actual = angular.y
         carDebug.steer.limit = yawLimit
         carDebug.steer.authority = speedFactor
-        const collider = body.collider(0)
-        if (collider) {
-          carDebug.steer.friction = collider.friction()
-          carDebug.steer.combine = collider.frictionCombineRule()
-        }
-        carDebug.steer.inertia = body.principalInertia().y
-        carDebug.steer.mass = mass
       }
 
       // ─── Тормоз ───────────────────────────────────────────────────────────
