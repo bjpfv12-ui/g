@@ -138,6 +138,10 @@ async function steerTest(label, throttleMs, steerMs) {
     ).toFixed(1)}°/с | лимит: ${((mid.limit * 180) / Math.PI).toFixed(1)}°/с | полномочия: ${mid.authority.toFixed(2)}`,
   )
   console.log(
+    `трение шин: ${mid.friction} (правило ${mid.combine}), масса ${mid.mass.toFixed(0)}, ` +
+      `инерция ${mid.inertia.toFixed(2)}`,
+  )
+  console.log(
     `кузов: ${((delta * 180) / Math.PI).toFixed(1)}° за ${(steerMs / 1000).toFixed(1)} c, ` +
       `в середине ${((mid.yawRate * 180) / Math.PI).toFixed(1)}°/с`,
   )
