@@ -109,32 +109,36 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
     const input = useInputStore.getState()
     const keys = input.keys
 
-    // ─── Ввод → направление в плоскости ───────────────────────────────────────
-    let forward = 0
-    let strafe = 0
-    if (keys['KeyW'] || keys['ArrowUp']) forward += 1
-    if (keys['KeyS'] || keys['ArrowDown']) forward -= 1
-    if (keys['KeyD'] || keys['ArrowRight']) strafe += 1
-    if (keys['KeyA'] || keys['ArrowLeft']) strafe -= 1
+    // ─── Ввод ─────────────────────────────────────────────────────────────────
+    // A/D доворачивают камеру вокруг персонажа (см. CameraFollow), а корпус
+    // доворачивается следом за ней. Поэтому здесь остались только «вперёд» и
+    // «назад».
+    const forwardInput = !!(keys['KeyW'] || keys['ArrowUp'])
+    const backwardInput = !!(keys['KeyS'] || keys['ArrowDown'])
     const sprint = !!(keys['ShiftLeft'] || keys['ShiftRight'])
-
-    const inputLength = Math.hypot(forward, strafe)
-    const yaw = useCameraStore.getState().yaw
-
-    let dirX = 0
-    let dirZ = 0
-    if (inputLength > 0) {
-      const f = forward / inputLength
-      const s = strafe / inputLength
-      // Вперёд/вбок относительно взгляда камеры, а не мировых осей.
-      dirX = -Math.sin(yaw) * f + Math.cos(yaw) * s
-      dirZ = -Math.cos(yaw) * f - Math.sin(yaw) * s
-    }
+    const moveInput = forwardInput !== backwardInput
+    const moveSign = forwardInput ? 1 : -1
 
     const position = rb.translation()
     const velocity = rb.linvel()
 
+    // ─── Доворот корпуса к прицелу ───────────────────────────────────────────
+    // Корпус доворачивается к направлению взгляда камеры с ограничением
+    // скорости: и поворот мышью, и поворот клавишами A/D ощущаются одинаково,
+    // а модель никогда не проворачивается рывком на пол-оборота.
+    const camYaw = useCameraStore.getState().yaw
+    const yawDiff = angleDiff(camYaw, facing.current)
+    const turnStep = THREE.MathUtils.clamp(
+      yawDiff * (1 - Math.exp(-TURN_RESPONSE * dt)),
+      -TURN_RATE * dt,
+      TURN_RATE * dt,
+    )
+    facing.current += turnStep
+
     // ─── Опора ────────────────────────────────────────────────────────────────
+    // Земля держится «липкой»: после касания ещё ненадолго считаем, что
+    // персонаж стоит на земле. Иначе луч-детектор дрожит на стыках плиток,
+    // и скорость хода пульсирует.
     const groundRay = new rapier.Ray(
       { x: position.x, y: position.y, z: position.z },
       { x: 0, y: -1, z: 0 },
@@ -148,15 +152,30 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
       undefined,
       rb,
     )
-    let grounded = groundHit !== null
+    if (groundHit) groundTimer.current = GROUND_STICKY
+    groundTimer.current = Math.max(0, groundTimer.current - dt)
+    let grounded = groundTimer.current > 0
     coyote.current = grounded ? COYOTE_TIME : Math.max(0, coyote.current - dt)
 
+    // ─── Направление движения ────────────────────────────────────────────────
+    // Персонаж бежит по своему курсу, а не по курсу камеры: в повороте он
+    // заходит в дугу, а камера остаётся за спиной.
+    const sinH = Math.sin(facing.current)
+    const cosH = Math.cos(facing.current)
+    let dirX = 0
+    let dirZ = 0
+    if (moveInput) {
+      dirX = -sinH * moveSign
+      dirZ = -cosH * moveSign
+    }
+
     // ─── Горизонтальное движение с ускорением ─────────────────────────────────
-    const speed = sprint ? SPRINT_SPEED : WALK_SPEED
+    const baseSpeed = sprint ? SPRINT_SPEED : WALK_SPEED
+    const speed = moveInput && moveSign < 0 ? baseSpeed * BACK_SPEED_FACTOR : baseSpeed
     const targetX = dirX * speed
     const targetZ = dirZ * speed
     // В воздухе управление вялое — как в GTA.
-    const groundedLambda = grounded ? 16 : 5
+    const groundedLambda = grounded ? 16 : 6
     let vx = THREE.MathUtils.damp(velocity.x, targetX, groundedLambda, dt)
     let vz = THREE.MathUtils.damp(velocity.z, targetZ, groundedLambda, dt)
 
