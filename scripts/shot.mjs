@@ -59,9 +59,12 @@ if (process.env.CAR === '1') {
   await new Promise((r) => setTimeout(r, 600))
 
   await page.keyboard.down('KeyW')
-  await new Promise((r) => setTimeout(r, 1800))
+  await new Promise((r) => setTimeout(r, 1400))
   await page.keyboard.down('KeyA')
-  await new Promise((r) => setTimeout(r, 900))
+  await new Promise((r) => setTimeout(r, 700))
+  await page.keyboard.up('KeyA')
+  await page.keyboard.up('KeyW')
+  await new Promise((r) => setTimeout(r, 400))
 
   const camInfo = await page.evaluate(() => {
     const p = window.__playerState
@@ -78,17 +81,15 @@ if (process.env.CAR === '1') {
   await page.evaluate(() => {
     const p = window.__playerState.position
     window.__freeCam = {
-      pos: [p.x + 9, p.y + 5, p.z + 9],
+      pos: [p.x + 7, p.y + 4, p.z + 7],
       look: [p.x, p.y, p.z],
     }
   })
-  await new Promise((r) => setTimeout(r, 900))
+  await new Promise((r) => setTimeout(r, 600))
   await page.screenshot({ path: OUT })
   await page.evaluate(() => {
     window.__freeCam = undefined
   })
-  await page.keyboard.up('KeyA')
-  await page.keyboard.up('KeyW')
 } else {
   // Доворачиваем персонажа клавишей D — видно, что камера встаёт за спину.
   await page.keyboard.down('KeyW')
