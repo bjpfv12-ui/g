@@ -465,11 +465,18 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         if (steer !== 0) {
           if (now > steerLogUntil.current) {
             steerLogUntil.current = now + 1000
-            console.log('[car] руль: лог на 1 с, angVel:', body.angvel())
+            const av = body.angvel()
+            console.log(
+              '[car] руль: лог на 1 с, angVel:',
+              { x: av.x, y: av.y, z: av.z },
+              'цель, рад/с:',
+              targetYawRate.toFixed(3),
+            )
           } else {
+            const av = body.angvel()
             console.log(
               '[car] angVel:',
-              body.angvel(),
+              { x: av.x, y: av.y, z: av.z },
               'цель, рад/с:',
               targetYawRate.toFixed(3),
               'направление:',
