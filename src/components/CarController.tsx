@@ -346,6 +346,12 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       const def = cars[index]
       if (!body) return
 
+      // Время шага никогда не должно быть нулём: два кадра в одной
+      // миллисекунде дают dt = 0, а деление на ноль превращает момент в NaN.
+      // Испорченная угловая скорость (NaN) остаётся в теле навсегда: руль
+      // перестаёт работать, а езда по прямой продолжается.
+      const sdt = Math.max(dt, MIN_DT)
+
       const input = useInputStore.getState()
       const keys = input.keys
 
