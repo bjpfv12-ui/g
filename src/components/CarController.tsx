@@ -256,6 +256,11 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       body.setLinvel({ x: 0, y: 0, z: 0 }, true)
       body.setAngvel({ x: 0, y: 0, z: 0 }, true)
 
+      // Шины «без трения»: сцепление с асфальтом держит только код (импульс
+      // GRIP). Плоское днище кузова иначе упирается в асфальт, и руль
+      // физически не может провернуть машину — она словно на рельсах.
+      body.collider(0)?.setFrictionCombineRule(CoefficientCombineRule.Min)
+
       // Персонаж прячем целиком: тело отключаем, меш гасит PlayerController.
       playerState.body?.setEnabled(false)
     },
@@ -276,6 +281,8 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // Гасим машину.
       body.setLinvel({ x: 0, y: 0, z: 0 }, true)
       body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      // Возвращаем обычное трение — припаркованная машина должна стоять.
+      body.collider(0)?.setFrictionCombineRule(CoefficientCombineRule.Average)
 
       // Возвращаем игрока у двери — со стороны бордюра.
       const player = playerState.body
