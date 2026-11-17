@@ -396,6 +396,20 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         )
       }
 
+      // ─── Тормоз: гасим поступательную скорость ────────────────────────────
+      // Тормоз сбрасывает скорость ДО блока руля: setAngvel в руле перезапишет
+      // угловую скорость, и тормоз погасил бы поворот, отобрав руль у водителя.
+      const brakeFactor = Math.max(0, 1 - TUNING.carBrake * dt)
+      if (braking) {
+        const speed = Math.hypot(velocity.x, velocity.z)
+        if (speed > 0.02) {
+          body.setLinvel(
+            { x: velocity.x * brakeFactor, y: velocity.y, z: velocity.z * brakeFactor },
+            true,
+          )
+        }
+      }
+
       // ─── Руль ─────────────────────────────────────────────────────────────
       // Полномочия руля падают с ростом скорости: на месте машина
       // доворачивает сильнее всего, на скорости — слабее всего.
@@ -412,12 +426,21 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // поворота начинает дёргаться туда-сюда.
       if (throttle > 0 && forwardSpeed > -GEAR_SPEED) {
         steerDirection.current = 1
+        reverseTimer.current = 0
       } else if (throttle < 0 && forwardSpeed < GEAR_SPEED) {
         steerDirection.current = -1
+        reverseTimer.current = 0
       } else if (forwardSpeed > GEAR_SPEED) {
         steerDirection.current = 1
+        reverseTimer.current = 0
       } else if (forwardSpeed < -GEAR_SPEED) {
-        steerDirection.current = -1
+        // Откат назад держим какое-то время: короткий отскок (например, при
+        // развороте на месте) передачу переключать не должен — иначе руль
+        // развернётся на полоборота.
+        reverseTimer.current += dt
+        if (reverseTimer.current > GEAR_SWITCH_DELAY) steerDirection.current = -1
+      } else {
+        reverseTimer.current = 0
       }
       const direction = steerDirection.current
 
@@ -426,8 +449,10 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
 
       // Гасим остаточное вращение и обнуляем боковые оси X/Z — кузов не
       // заваливается на бок. Множитель задан на 60 кадров в секунду.
+      // Под тормозом гашение сильнее: машина выпрямляется, но руль при этом
+      // продолжает работать.
       const dampFactor = Math.pow(TUNING.carYawDamping, dt * 60)
-      const damped = angular.y * dampFactor
+      const damped = angular.y * dampFactor * (braking ? brakeFactor : 1)
 
       // К цели идём сглаженно: carSteerResponse задаёт, как быстро руль
       // набирает полномочия. Инерция берётся из габаритов кузова.
@@ -448,6 +473,30 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // теряется и руль не работает вовсе.
       body.setAngvel({ x: 0, y: damped, z: 0 }, true)
       body.applyTorqueImpulse({ x: 0, y: turnForce * dt, z: 0 }, true)
+
+      // ─── Аварийный доворот ────────────────────────────────────────────────
+      // Физика иногда не даёт провернуть кузов: колесо в бордюре, нос в стене,
+      // угол здания. Тогда момент гасится контактом, руль «умирает», и машина
+      // не реагирует на A/D. Если так держится дольше STUCK_UNSTICK_DELAY,
+      // доводим курс кодом — поворот происходит в любом случае.
+      const targetAbs = Math.abs(targetYawRate)
+      if (targetAbs > 0.5 && targetAbs - Math.abs(angular.y) > targetAbs * 0.6) {
+        stuckTimer.current += dt
+      } else {
+        stuckTimer.current = 0
+      }
+      if (stuckTimer.current > STUCK_UNSTICK_DELAY) {
+        const turn = carTurnQuat.setFromAxisAngle(UP, (targetYawRate - angular.y) * dt)
+        const cur = body.rotation()
+        carBodyQuat.set(cur.x, cur.y, cur.z, cur.w)
+        carBodyQuat.premultiply(turn)
+        body.setRotation(
+          { x: carBodyQuat.x, y: carBodyQuat.y, z: carBodyQuat.z, w: carBodyQuat.w },
+          true,
+        )
+        body.setAngvel({ x: 0, y: targetYawRate, z: 0 }, true)
+        carDebug.steer.unstuck++
+      }
 
       if (import.meta.env.DEV) {
         carDebug.steer.target = targetYawRate
