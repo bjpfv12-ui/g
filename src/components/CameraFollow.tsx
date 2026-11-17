@@ -5,6 +5,7 @@ import { useRapier } from '@react-three/rapier'
 import { useInputStore } from '../store/InputStore'
 import { useCameraStore } from '../store/CameraStore'
 import { playerState } from '../state/playerState'
+import { TUNING } from '../tuning'
 
 const MIN_PITCH = -0.38
 const MAX_PITCH = 1.2
@@ -99,9 +100,9 @@ export function CameraFollow() {
     // ─── Орбита мышью ─────────────────────────────────────────────────────────
     if (mouse.x !== 0 || mouse.y !== 0) {
       mouseIdle.current = 0
-      const nextYaw = cam.yaw - mouse.x * SENSITIVITY
+      const nextYaw = cam.yaw - mouse.x * TUNING.mouseSensitivity
       const nextPitch = THREE.MathUtils.clamp(
-        cam.pitch + mouse.y * SENSITIVITY,
+        cam.pitch + mouse.y * TUNING.mouseSensitivity,
         MIN_PITCH,
         MAX_PITCH,
       )
@@ -112,17 +113,17 @@ export function CameraFollow() {
     }
 
     // ─── Поворот камеры клавишами A/D ─────────────────────────────────────────
-    // На ногах A/D доворачивают камеру вокруг персонажа, и корпус доворачивается
-    // следом за ней (см. PlayerController) — получается плавная дуга.
-    // За рулём A/D рулят машиной, поэтому там поворот камеры не трогаем.
-    if (!playerState.driving) {
+    // Только в режиме 'body': там A/D доворачивают персонажа, и камера
+    // встаёт за спину. В режиме 'camera' A/D — это шаг вбок, и камера
+    // остаётся там, куда её повернула мышь.
+    if (!playerState.driving && TUNING.controlMode === 'body') {
       const keys = input.keys
       const turn =
         (keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0) +
         (keys['KeyD'] || keys['ArrowRight'] ? -1 : 0)
       if (turn !== 0) {
         const store = useCameraStore.getState()
-        store.setYaw(store.yaw + turn * KEY_TURN_RATE * dt)
+        store.setYaw(store.yaw + turn * TUNING.cameraKeyTurnRate * dt)
       }
     }
 
