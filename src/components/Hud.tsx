@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useInputStore } from '../store/InputStore'
 import { useUiStore } from '../store/UiStore'
 import { playerState } from '../state/playerState'
+import { TUNING } from '../tuning'
 import { Minimap } from './Minimap'
 import { Clock } from './Clock'
 import { Speedometer } from './Speedometer'
@@ -97,9 +98,13 @@ export function Hud() {
             <h1>Sunset District</h1>
             <p>Кликните по экрану, чтобы войти в город.</p>
             <ul>
-              <li>W/S — движение по курсу персонажа, A/D — поворот</li>
+              <li>
+                {TUNING.controlMode === 'body'
+                  ? 'W/S — движение по курсу персонажа, A/D — поворот'
+                  : 'WASD — движение относительно камеры'}
+              </li>
               <li>Shift — спринт, Space — прыжок</li>
-              <li>Мышь — прицел и орбитальная камера</li>
+              <li>Мышь — орбитальная камера</li>
             </ul>
             <span className="hud__cta">клик → захват мыши</span>
           </div>
