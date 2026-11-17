@@ -47,6 +47,17 @@ const carDebug = {
   /** Тело и габариты текущей машины — для автотестов и замеров. */
   body: null as RapierRigidBody | null,
   dims: { width: 0, length: 0, height: 0 },
+  /** Покадровая трасса руля — только для DEV-диагностики. */
+  trace: [] as {
+    t: number
+    steer: number
+    forwardSpeed: number
+    target: number
+    yaw: number
+    torque: number
+    angvel: number
+  }[],
+  traceOn: false,
 }
 
 if (import.meta.env.DEV) {
@@ -435,6 +446,18 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       carDebug.dims.width = def.width
       carDebug.dims.length = def.length
       carDebug.dims.height = def.height
+      if (import.meta.env.DEV && carDebug.traceOn) {
+        carDebug.trace.push({
+          t: performance.now(),
+          steer,
+          forwardSpeed,
+          target: targetYawRate,
+          yaw: playerState.carYaw,
+          torque,
+          angvel: angular.y,
+        })
+        if (carDebug.trace.length > 4000) carDebug.trace.shift()
+      }
     },
     [cars],
   )
