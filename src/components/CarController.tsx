@@ -360,8 +360,44 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       const input = useInputStore.getState()
       const keys = input.keys
 
-      const mass = body.mass()
-      const rot = body.rotation()
+      // Тело физики может оказаться испорченным (NaN в скоростях): Rapier
+      // после этого перестаёт отдавать состояние и бросает исключение на
+      // каждом обращении. Ловим это и пересоздаём кузов — иначе управление
+      // пропало бы навсегда.
+      let mass = 0
+      let velocity: { x: number; y: number; z: number }
+      let angular: { x: number; y: number; z: number }
+      let rot: { x: number; y: number; z: number; w: number }
+      try {
+        mass = body.mass()
+        velocity = body.linvel()
+        angular = body.angvel()
+        rot = body.rotation()
+      } catch (err) {
+        console.warn(
+          '[car] тело физики сломано, пересоздаём кузов:',
+          err instanceof Error ? err.message : err,
+        )
+        respawnCar(index)
+        return
+      }
+
+      // Угловая скорость должна быть числом: иначе она «залипает» в теле
+      // и руль перестаёт работать навсегда.
+      if (
+        !Number.isFinite(angular.x) ||
+        !Number.isFinite(angular.y) ||
+        !Number.isFinite(angular.z)
+      ) {
+        try {
+          body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+        } catch {
+          respawnCar(index)
+        }
+        stuckTimer.current = 0
+        return
+      }
+
       carQuaternion.set(rot.x, rot.y, rot.z, rot.w)
 
       // Вперёд по локальной оси машины, в горизонтали.
@@ -377,19 +413,6 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
 
       const velocity = body.linvel()
       const angular = body.angvel()
-
-      // Страховка от испорченного состояния: если угловая скорость вдруг
-      // перестала быть числом, гасим её и продолжаем — иначе руль не
-      // восстановится уже никогда.
-      const spinBroken =
-        !Number.isFinite(angular.x) ||
-        !Number.isFinite(angular.y) ||
-        !Number.isFinite(angular.z)
-      if (spinBroken) {
-        body.setAngvel({ x: 0, y: 0, z: 0 }, true)
-        stuckTimer.current = 0
-        return
-      }
 
       const forwardSpeed = velocity.x * forward.x + velocity.z * forward.z
       const sideSpeed = velocity.x * side.x + velocity.z * side.z
