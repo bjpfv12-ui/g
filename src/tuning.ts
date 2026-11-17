@@ -84,6 +84,8 @@ export interface Tuning {
   carMinSteerAuthority: number
   /** Скорость гашения бокового скольжения, 1/с. Меньше — больше занос. */
   carGrip: number
+  /** Тормоз: доля скорости, снимаемая за секунду. */
+  carBrake: number
   /**
    * Бесфрикционные шины на время езды: иначе момент трения о днище
    * (≈ 99 Н·м) не даёт рулу провернуть машину (≈ 10 Н·м).
@@ -124,6 +126,7 @@ export const TUNING: Tuning = {
   carSteerFullSpeed: 5,
   carMinSteerAuthority: 0.45,
   carGrip: 8,
+  carBrake: 6,
   carFrictionlessTires: true,
 }
 
