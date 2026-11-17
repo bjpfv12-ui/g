@@ -30,6 +30,11 @@ const GEAR_SWITCH_DELAY = 0.5
  * Нужно, когда контакт (бордюр, стена) гасит момент и руль «умирает».
  */
 const STUCK_UNSTICK_DELAY = 0.25
+/**
+ * Минимальный шаг времени для расчётов, с. Нулевой шаг (два кадра в одной
+ * миллисекунде) приводит к делению на ноль и к NaN в угловой скорости.
+ */
+const MIN_DT = 1e-4
 
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -372,6 +377,20 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
 
       const velocity = body.linvel()
       const angular = body.angvel()
+
+      // Страховка от испорченного состояния: если угловая скорость вдруг
+      // перестала быть числом, гасим её и продолжаем — иначе руль не
+      // восстановится уже никогда.
+      const spinBroken =
+        !Number.isFinite(angular.x) ||
+        !Number.isFinite(angular.y) ||
+        !Number.isFinite(angular.z)
+      if (spinBroken) {
+        body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+        stuckTimer.current = 0
+        return
+      }
+
       const forwardSpeed = velocity.x * forward.x + velocity.z * forward.z
       const sideSpeed = velocity.x * side.x + velocity.z * side.z
 
@@ -393,7 +412,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       if (throttle !== 0 && !braking) {
         const accel = throttle > 0 ? TUNING.carEngineAccel : TUNING.carReverseAccel
         const desired = THREE.MathUtils.clamp(
-          forwardSpeed + throttle * accel * dt,
+          forwardSpeed + throttle * accel * sdt,
           -TUNING.carMaxReverseSpeed,
           TUNING.carMaxSpeed,
         )
@@ -413,11 +432,11 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // модуль почти не меняется.
       const speedNow = Math.hypot(velocity.x, velocity.z)
       if (speedNow > 0.05) {
-        const follow = 1 - Math.exp(-TUNING.carGrip * dt)
+        const follow = 1 - Math.exp(-TUNING.carGrip * sdt)
         // Угол скольжения: насколько скорость отстаёт от курса кузова.
         const slip = Math.abs(Math.asin(THREE.MathUtils.clamp(sideSpeed / speedNow, -1, 1)))
         // В заносе машина всё же слегка теряет ход.
-        const drag = Math.max(0, 1 - TUNING.carTurnDrag * slip * dt)
+        const drag = Math.max(0, 1 - TUNING.carTurnDrag * slip * sdt)
         const wantX = forward.x * speedNow * drag
         const wantZ = forward.z * speedNow * drag
         const nextX = velocity.x + (wantX - velocity.x) * follow
@@ -431,7 +450,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // ─── Тормоз: гасим поступательную скорость ────────────────────────────
       // Тормоз сбрасывает скорость ДО блока руля: setAngvel в руле перезапишет
       // угловую скорость, и тормоз погасил бы поворот, отобрав руль у водителя.
-      const brakeFactor = Math.max(0, 1 - TUNING.carBrake * dt)
+      const brakeFactor = Math.max(0, 1 - TUNING.carBrake * sdt)
       if (braking) {
         const speed = Math.hypot(velocity.x, velocity.z)
         if (speed > 0.02) {
@@ -469,7 +488,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         // Откат назад держим какое-то время: короткий отскок (например, при
         // развороте на месте) передачу переключать не должен — иначе руль
         // развернётся на полоборота.
-        reverseTimer.current += dt
+        reverseTimer.current += sdt
         if (reverseTimer.current > GEAR_SWITCH_DELAY) steerDirection.current = -1
       } else {
         reverseTimer.current = 0
@@ -483,13 +502,13 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // заваливается на бок. Множитель задан на 60 кадров в секунду.
       // Под тормозом гашение сильнее: машина выпрямляется, но руль при этом
       // продолжает работать.
-      const dampFactor = Math.pow(TUNING.carYawDamping, dt * 60)
+      const dampFactor = Math.pow(TUNING.carYawDamping, sdt * 60)
       const damped = angular.y * dampFactor * (braking ? brakeFactor : 1)
 
       // К цели идём сглаженно: carSteerResponse задаёт, как быстро руль
       // набирает полномочия. Инерция берётся из габаритов кузова.
       const inertia = (mass * (def.width * def.width + def.length * def.length)) / 12
-      const step = Math.min(1, TUNING.carSteerResponse * dt)
+      const step = Math.min(1, TUNING.carSteerResponse * sdt)
       // Гашение съедает часть скорости поворота, поэтому целевую запрашиваем
       // с запасом — иначе фактическая скорость была бы ниже заданной.
       const compensation = (1 - dampFactor + step * dampFactor) / step
@@ -498,13 +517,13 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
 
       // Момент подбираем так, чтобы за шаг скорость вращения дошла до
       // nextYawRate: импульс = Δω · инерция.
-      const turnForce = ((nextYawRate - damped) * inertia) / dt
+      const turnForce = ((nextYawRate - damped) * inertia) / sdt
 
       // Порядок важен! applyTorqueImpulse меняет angvel сразу, а setAngvel
       // перезаписывает его — если сначала крутим, а потом гасим, импульс
       // теряется и руль не работает вовсе.
       body.setAngvel({ x: 0, y: damped, z: 0 }, true)
-      body.applyTorqueImpulse({ x: 0, y: turnForce * dt, z: 0 }, true)
+      body.applyTorqueImpulse({ x: 0, y: turnForce * sdt, z: 0 }, true)
 
       // ─── Аварийный доворот ────────────────────────────────────────────────
       // Физика иногда не даёт провернуть кузов: колесо в бордюре, нос в стене,
@@ -513,12 +532,12 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // доводим курс кодом — поворот происходит в любом случае.
       const targetAbs = Math.abs(targetYawRate)
       if (targetAbs > 0.5 && targetAbs - Math.abs(angular.y) > targetAbs * 0.6) {
-        stuckTimer.current += dt
+        stuckTimer.current += sdt
       } else {
         stuckTimer.current = 0
       }
       if (stuckTimer.current > STUCK_UNSTICK_DELAY) {
-        const turn = carTurnQuat.setFromAxisAngle(UP, (targetYawRate - angular.y) * dt)
+        const turn = carTurnQuat.setFromAxisAngle(UP, (targetYawRate - angular.y) * sdt)
         const cur = body.rotation()
         carBodyQuat.set(cur.x, cur.y, cur.z, cur.w)
         carBodyQuat.premultiply(turn)
