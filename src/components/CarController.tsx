@@ -222,6 +222,8 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   const steerDirection = useRef(1)
   /** До какого момента (мс) печатаем angVel в консоль — 1 с после нажатия A/D. */
   const steerLogUntil = useRef(0)
+  /** Предыдущее положение руля — чтобы поймать новое нажатие. */
+  const prevSteer = useRef(0)
 
   const setCarPrompt = useUiStore((state) => state.setCarPrompt)
 
@@ -462,10 +464,11 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // ─── Диагностика руля: 1 секунда лога при нажатии A/D (только DEV) ───
       if (import.meta.env.DEV) {
         const now = performance.now()
-        if (steer !== 0) {
-          if (now > steerLogUntil.current) {
-            steerLogUntil.current = now + 1000
-          }
+        const pressed = steer !== 0 && prevSteer.current === 0
+        prevSteer.current = steer
+        // Лог живёт ровно секунду от нажатия, а не до отпускания.
+        if (pressed) steerLogUntil.current = now + 1000
+        if (steer !== 0 && now < steerLogUntil.current) {
           const av = body.angvel()
           console.log(
             `[car] angVel: x=${av.x.toFixed(3)} y=${av.y.toFixed(3)} z=${av.z.toFixed(3)} | ` +
