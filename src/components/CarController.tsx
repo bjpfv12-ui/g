@@ -389,6 +389,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // Курс машины — камера по нему возвращается за кузов.
       playerState.carYaw = Math.atan2(forward.x, forward.z)
       playerState.carForwardSpeed = forwardSpeed
+      playerState.carYawRate = angular.y
 
       carDebug.speed = playerState.speed
       carDebug.throttle = throttle

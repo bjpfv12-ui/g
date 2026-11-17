@@ -18,6 +18,8 @@ export const playerState = {
   carYaw: 0,
   /** Скорость машины вдоль её продольной оси, м/с (со знаком). */
   carForwardSpeed: 0,
+  /** Скорость поворота кузова машины, рад/с (со знаком). */
+  carYawRate: 0,
   /** Тело игрока — камера исключает его из своих лучей. */
   body: null as RapierRigidBody | null,
 }
