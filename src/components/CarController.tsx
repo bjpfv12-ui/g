@@ -29,12 +29,14 @@ const MAX_YAW_RATE = 1.6
 const YAW_SPEED_FALLOFF = 12
 /** Насколько быстро кузов доворачивается до заданной скорости поворота, 1/с. */
 const STEER_RESPONSE = 6
+/** Скорость, с которой руль выходит на полные полномочия, м/с. */
+const STEER_FULL_SPEED = 5
+/** Минимум полномочий руля — на месте машина доворачивает медленно. */
+const MIN_STEER_AUTHORITY = 0.3
 /** Скорость гашения бокового скольжения, 1/с. */
 const GRIP = 8
 /** Тормоз: доля скорости, снимаемая за секунду. */
 const BRAKE = 6
-/** Затухание вращения кузова, 1/с — руль возвращается в «прямо». */
-const ANGULAR_DAMP = 1.4
 /** Насколько машина выезжает из бордюра при выходе, м. */
 const EXIT_OFFSET = 0.75
 
@@ -347,6 +349,11 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // Управляем не моментом, а целевой скоростью поворота кузова.
       // Так руль сам возвращается в «прямо», а на большой скорости угол
       // ограничивается — как в настоящей машине.
+      const speedFactor = THREE.MathUtils.clamp(
+        Math.abs(forwardSpeed) / STEER_FULL_SPEED,
+        MIN_STEER_AUTHORITY,
+        1,
+      )
       const yawLimit =
         MAX_YAW_RATE / (1 + Math.abs(forwardSpeed) / YAW_SPEED_FALLOFF)
       // На заднем ходу руль работает наоборот.
