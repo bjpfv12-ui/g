@@ -163,6 +163,20 @@ await record(['KeyW'], 2000)
 const braking = await record(['KeyW', 'Space', 'KeyA'], 2500)
 summarize('7. Под тормозом: руль работает', braking, { expectSign: 1, minYawRate: 40 })
 
+// 8. Регрессия: кадр с dt = 0 (два кадра в одной миллисекунде) не должен
+// ломать тело. Раньше деление на ноль давало NaN в угловой скорости, и руль
+// умирал навсегда, а езда по прямой продолжалась.
+await record(['KeyW', 'KeyA'], 1200)
+await page.evaluate(() => {
+  window.__carState.forceZeroDt = true
+  requestAnimationFrame(() => {
+    window.__carState.forceZeroDt = false
+  })
+})
+await new Promise((r) => setTimeout(r, 300))
+const afterZeroDt = await record(['KeyW', 'KeyA'], 2000)
+summarize('8. После кадра с dt = 0 руль жив', afterZeroDt, { expectSign: 1, minYawRate: 40 })
+
 const failed = results.filter((r) => !r.ok)
 
 // 6. Ось Y не заблокирована: эффективная инерция по Y должна быть не нулевой.
