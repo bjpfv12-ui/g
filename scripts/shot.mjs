@@ -82,18 +82,29 @@ if (process.env.CAR === '1') {
   console.log('камера до кузова:', camInfo.dist.toFixed(2), 'м | курс', camInfo.carYaw.toFixed(2))
 
   // Свободная камера: смотрим на машину сбоку и сверху, чтобы оценить кузов.
-  await page.evaluate(() => {
-    const p = window.__playerState.position
-    window.__freeCam = {
-      pos: [p.x + 7, p.y + 4, p.z + 7],
-      look: [p.x, p.y, p.z],
-    }
-  })
-  await new Promise((r) => setTimeout(r, 600))
-  await page.screenshot({ path: OUT })
-  await page.evaluate(() => {
-    window.__freeCam = undefined
-  })
+  if (process.env.FREE === '1') {
+    await page.evaluate(() => {
+      const p = window.__playerState.position
+      window.__freeCam = {
+        pos: [p.x + 7, p.y + 4, p.z + 7],
+        look: [p.x, p.y, p.z],
+      }
+    })
+    await new Promise((r) => setTimeout(r, 600))
+    await page.screenshot({ path: OUT })
+    await page.evaluate(() => {
+      window.__freeCam = undefined
+    })
+  } else {
+    // Обычная игровая камера — вид от третьего лица за рулём.
+    await page.keyboard.down('KeyW')
+    await new Promise((r) => setTimeout(r, 900))
+    await page.keyboard.down('KeyA')
+    await new Promise((r) => setTimeout(r, 500))
+    await page.screenshot({ path: OUT })
+    await page.keyboard.up('KeyA')
+    await page.keyboard.up('KeyW')
+  }
 } else {
   // Доворачиваем персонажа клавишей D — видно, что камера встаёт за спину.
   await page.keyboard.down('KeyW')
