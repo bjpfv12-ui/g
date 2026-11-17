@@ -40,6 +40,7 @@ const carState = () =>
     yaw: window.__playerState.carYaw,
     yawRate: window.__playerState.carYawRate,
     forwardSpeed: window.__playerState.carForwardSpeed,
+    upY: window.__playerState.carUpY,
   }))
 
 /** Снимает телеметрию каждый кадр, пока идёт сбор. */
@@ -62,6 +63,7 @@ const sample = (ms) =>
             actual: window.__carState.steer.actual,
             limit: window.__carState.steer.limit,
             authority: window.__carState.steer.authority,
+            upY: window.__playerState.carUpY,
           })
           if (performance.now() - start < duration) requestAnimationFrame(tick)
           else resolve(rows)
@@ -137,6 +139,7 @@ async function steerTest(label, throttleMs, steerMs) {
     `кузов: ${((delta * 180) / Math.PI).toFixed(1)}° за ${(steerMs / 1000).toFixed(1)} c, ` +
       `в середине ${((mid.yawRate * 180) / Math.PI).toFixed(1)}°/с`,
   )
+  console.log(`наклон кузова (up.y): ${mid.upY.toFixed(2)} → ${last.upY.toFixed(2)}`)
   console.log(
     `скорость после: ${last.speed.toFixed(1)} м/с, пройдено ${travel.toFixed(1)} м`,
   )

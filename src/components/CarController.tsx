@@ -419,6 +419,8 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       playerState.carYaw = Math.atan2(forward.x, forward.z)
       playerState.carForwardSpeed = forwardSpeed
       playerState.carYawRate = angular.y
+      // Насколько кузов перевёрнут: «вверх» машины в мировых координатах.
+      playerState.carUpY = UP.clone().applyQuaternion(carQuaternion).y
 
       carDebug.speed = playerState.speed
       carDebug.throttle = throttle
