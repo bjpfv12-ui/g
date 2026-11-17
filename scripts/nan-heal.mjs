@@ -93,8 +93,9 @@ console.log(
 
 // Ломаем тело: впихиваем NaN в угловую скорость.
 const injected = await page.evaluate(() => {
+  const b = window.__carState.body
   try {
-    window.__carState.body.setAngvel({ x: NaN, y: NaN, z: NaN }, true)
+    b.setAngvel({ x: NaN, y: NaN, z: NaN }, true)
     return 'впихнули NaN'
   } catch (e) {
     return 'Rapier отверг: ' + e.message
@@ -102,6 +103,33 @@ const injected = await page.evaluate(() => {
 })
 console.log(injected)
 await new Promise((r) => setTimeout(r, 1200))
+
+// Пробуем починить тело снаружи — так же, как это сделает игра.
+const repair = await page.evaluate(() => {
+  const b = window.__carState.body
+  const out = []
+  try {
+    b.angvel()
+    out.push('angvel читается')
+  } catch (e) {
+    out.push('angvel: ' + e.message.slice(0, 60))
+    try {
+      b.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      b.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      out.push('сброс прошёл')
+    } catch (e2) {
+      out.push('сброс не удался: ' + e2.message.slice(0, 60))
+    }
+  }
+  try {
+    const v = b.angvel()
+    out.push(`после сброса angvel.y=${v.y}`)
+  } catch (e3) {
+    out.push('после сброса всё ещё: ' + e3.message.slice(0, 60))
+  }
+  return out
+})
+repair.forEach((line) => console.log('  ' + line))
 
 const after = await read()
 const yawDeg = (after.yawRate * 180) / Math.PI
