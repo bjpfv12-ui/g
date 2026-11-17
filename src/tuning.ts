@@ -52,6 +52,8 @@ export interface Tuning {
   jumpSpeed: number
   /** Максимальная высота ступеньки, на которую персонаж запрыгивает, м. */
   maxStepHeight: number
+  /** Импульс вверх при перешагивании бордюра, м/с. */
+  stepHopSpeed: number
   /** Минимальная высота ступеньки (ниже — игнорируем швы). */
   minStepHeight: number
   /** Насколько далеко ищем бордюр впереди, м. */
@@ -106,6 +108,7 @@ export const TUNING: Tuning = {
 
   jumpSpeed: 8.8,
   maxStepHeight: 0.45,
+  stepHopSpeed: 3.2,
   minStepHeight: 0.04,
   stepLookAhead: 0.7,
   stepHopCooldown: 0.45,
