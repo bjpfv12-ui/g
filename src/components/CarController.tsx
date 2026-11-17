@@ -352,8 +352,12 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         TUNING.carMinSteerAuthority,
         1,
       )
+      // carYawFalloff = 0 — спада нет, руль одинаково резкий на любой скорости.
       const yawLimit =
-        TUNING.carMaxYawRate / (1 + Math.abs(forwardSpeed) / TUNING.carYawFalloff)
+        TUNING.carYawFalloff > 0
+          ? TUNING.carMaxYawRate /
+            (1 + Math.abs(forwardSpeed) / TUNING.carYawFalloff)
+          : TUNING.carMaxYawRate
       // На заднем ходу руль работает наоборот.
       const direction = forwardSpeed < 0 ? -1 : 1
       const targetYawRate = steer * direction * yawLimit * speedFactor
