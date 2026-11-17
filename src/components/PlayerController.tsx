@@ -79,30 +79,67 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
 
     const input = useInputStore.getState()
     const keys = input.keys
+    const t = TUNING
 
     // ─── Ввод ─────────────────────────────────────────────────────────────────
-    // A/D доворачивают камеру вокруг персонажа (см. CameraFollow), а корпус
-    // доворачивается следом за ней. Поэтому здесь остались только «вперёд» и
-    // «назад».
     const forwardInput = !!(keys['KeyW'] || keys['ArrowUp'])
     const backwardInput = !!(keys['KeyS'] || keys['ArrowDown'])
+    const strafeRight = !!(keys['KeyD'] || keys['ArrowRight'])
+    const strafeLeft = !!(keys['KeyA'] || keys['ArrowLeft'])
     const sprint = !!(keys['ShiftLeft'] || keys['ShiftRight'])
-    const moveInput = forwardInput !== backwardInput
-    const moveSign = forwardInput ? 1 : -1
 
     const position = rb.translation()
     const velocity = rb.linvel()
 
-    // ─── Доворот корпуса к прицелу ───────────────────────────────────────────
-    // Корпус доворачивается к направлению взгляда камеры с ограничением
-    // скорости: и поворот мышью, и поворот клавишами A/D ощущаются одинаково,
-    // а модель никогда не проворачивается рывком на пол-оборота.
     const camYaw = useCameraStore.getState().yaw
-    const yawDiff = angleDiff(camYaw, facing.current)
+    // Режим 'body' — GTA: A/D доворачивают камеру (CameraFollow), ход идёт по
+    // курсу корпуса. Режим 'camera' — привычное WASD относительно взгляда камеры.
+    const bodyMode = t.controlMode === 'body'
+
+    let dirX = 0
+    let dirZ = 0
+    /** Продольная составляющая: >0 — вперёд, <0 — назад. */
+    let forward = 0
+
+    if (bodyMode) {
+      if (forwardInput !== backwardInput) {
+        forward = forwardInput ? 1 : -1
+        const sinH = Math.sin(facing.current)
+        const cosH = Math.cos(facing.current)
+        dirX = -sinH * forward
+        dirZ = -cosH * forward
+      }
+    } else {
+      let f = 0
+      let s = 0
+      if (forwardInput) f += 1
+      if (backwardInput) f -= 1
+      if (strafeRight) s += 1
+      if (strafeLeft) s -= 1
+      const len = Math.hypot(f, s)
+      if (len > 0) {
+        f /= len
+        s /= len
+        forward = f
+        // Вперёд/вбок относительно взгляда камеры, а не мировых осей.
+        dirX = -Math.sin(camYaw) * f + Math.cos(camYaw) * s
+        dirZ = -Math.cos(camYaw) * f - Math.sin(camYaw) * s
+      }
+    }
+    const moving = dirX !== 0 || dirZ !== 0
+
+    // ─── Доворот корпуса ──────────────────────────────────────────────────────
+    // В режиме 'camera' корпус доворачивается туда, куда идёт; в режиме 'body' —
+    // к прицелу, следом за камерой. Скорость ограничена, чтобы модель не
+    // проворачивалась рывком на пол-оборота.
+    let targetFacing = facing.current
+    if (bodyMode) targetFacing = camYaw
+    else if (moving) targetFacing = Math.atan2(-dirX, -dirZ)
+    const yawDiff = angleDiff(targetFacing, facing.current)
     const turnStep = THREE.MathUtils.clamp(
-      yawDiff * (1 - Math.exp(-TURN_RESPONSE * dt)),
-      -TURN_RATE * dt,
-      TURN_RATE * dt,
+      yawDiff * (1 - Math.exp(-t.bodyTurnResponse * dt)),
+      -t.bodyTurnRate * dt,
+      t.bodyTurnRate * dt,
     )
     facing.current += turnStep
 
@@ -123,32 +160,20 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
       undefined,
       rb,
     )
-    if (groundHit) groundTimer.current = GROUND_STICKY
+    if (groundHit) groundTimer.current = t.groundSticky
     groundTimer.current = Math.max(0, groundTimer.current - dt)
     let grounded = groundTimer.current > 0
     coyote.current = grounded ? COYOTE_TIME : Math.max(0, coyote.current - dt)
 
-    // ─── Направление движения ────────────────────────────────────────────────
-    // Персонаж бежит по своему курсу, а не по курсу камеры: в повороте он
-    // заходит в дугу, а камера остаётся за спиной.
-    const sinH = Math.sin(facing.current)
-    const cosH = Math.cos(facing.current)
-    let dirX = 0
-    let dirZ = 0
-    if (moveInput) {
-      dirX = -sinH * moveSign
-      dirZ = -cosH * moveSign
-    }
-
     // ─── Горизонтальное движение с ускорением ─────────────────────────────────
-    const baseSpeed = sprint ? SPRINT_SPEED : WALK_SPEED
-    const speed = moveInput && moveSign < 0 ? baseSpeed * BACK_SPEED_FACTOR : baseSpeed
+    const baseSpeed = sprint ? t.walkSpeed * t.sprintMultiplier : t.walkSpeed
+    const speed = forward < 0 ? baseSpeed * t.backSpeedFactor : baseSpeed
     const targetX = dirX * speed
     const targetZ = dirZ * speed
     // В воздухе управление вялое — как в GTA.
-    const groundedLambda = grounded ? 16 : 6
-    let vx = THREE.MathUtils.damp(velocity.x, targetX, groundedLambda, dt)
-    let vz = THREE.MathUtils.damp(velocity.z, targetZ, groundedLambda, dt)
+    const lambda = grounded ? (moving ? t.accelRate : t.brakeRate) : t.airControlRate
+    let vx = THREE.MathUtils.damp(velocity.x, targetX, lambda, dt)
+    let vz = THREE.MathUtils.damp(velocity.z, targetZ, lambda, dt)
 
     // ─── Прыжок ───────────────────────────────────────────────────────────────
     const jumpPressed = input.consumePress('Space')
