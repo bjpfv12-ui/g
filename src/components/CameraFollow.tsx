@@ -26,7 +26,7 @@ const FOLLOW_LAMBDA = 12
 /** Насколько резко камера доворачивает взгляд на игрока. */
 const LOOK_LAMBDA = 18
 /** Сколько секунд можно не трогать мышь, чтобы камера сама поехала за машиной. */
-const CAR_ALIGN_DELAY = 0.7
+const CAR_ALIGN_DELAY = 1.2
 /** Насколько плавно камера догоняет курс машины, 1/с. */
 const CAR_ALIGN_RATE = 1.8
 /** Минимальная скорость машины, с которой камера возвращается за кузов, м/с. */
@@ -91,6 +91,7 @@ export function CameraFollow() {
 
     // ─── Орбита мышью ─────────────────────────────────────────────────────────
     if (mouse.x !== 0 || mouse.y !== 0) {
+      mouseIdle.current = 0
       const nextYaw = cam.yaw - mouse.x * SENSITIVITY
       const nextPitch = THREE.MathUtils.clamp(
         cam.pitch + mouse.y * SENSITIVITY,
@@ -99,11 +100,28 @@ export function CameraFollow() {
       )
       cam.setYaw(nextYaw)
       cam.setPitch(nextPitch)
+    } else {
+      mouseIdle.current += dt
     }
 
-    const yaw = cam.yaw
-    const pitch = cam.pitch
-    const distance = cam.distance
+    // ─── Камера возвращается за машину ───────────────────────────────────────
+    // Как в GTA: если мышь не трогают, камера мягко доворачивается за кузов,
+    // иначе машина уезжает вбок из поля зрения.
+    if (
+      playerState.driving &&
+      playerState.carForwardSpeed > CAR_ALIGN_SPEED &&
+      mouseIdle.current > CAR_ALIGN_DELAY
+    ) {
+      // При yaw = 0 камера смотрит в -Z, а машина едет локальной осью +Z —
+      // значит целевой yaw на π больше курса машины.
+      const targetYaw = playerState.carYaw + Math.PI
+      const store = useCameraStore.getState()
+      store.setYaw(lerpAngle(store.yaw, targetYaw, 1 - Math.exp(-CAR_ALIGN_RATE * dt)))
+    }
+
+    const yaw = useCameraStore.getState().yaw
+    const pitch = useCameraStore.getState().pitch
+    const distance = useCameraStore.getState().distance
 
     // ─── Цель — чуть выше головы ─────────────────────────────────────────────
     target.set(
