@@ -313,17 +313,22 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       const braking = !!keys['Space']
 
       // ─── Газ / задний ход ─────────────────────────────────────────────────
+      // Тяну импульсом так, чтобы продольная скорость подтягивалась к целевой:
+      // так машина гарантированно трогается, даже если сцепление подъедает
+      // часть усилия. Боковой компонент скорости трогать нельзя — его гасит
+      // сцепление ниже, иначе машину будет разворачивать на месте.
       if (throttle !== 0 && !braking) {
-        const limit = throttle > 0 ? MAX_SPEED : MAX_REVERSE_SPEED
-        const underLimit = throttle > 0 ? forwardSpeed < limit : forwardSpeed > -limit
-        if (underLimit) {
-          const accel = throttle > 0 ? ENGINE_ACCEL : REVERSE_ACCEL
-          const impulse = accel * mass * dt
-          body.applyImpulse(
-            { x: forward.x * impulse, y: 0, z: forward.z * impulse },
-            true,
-          )
-        }
+        const accel = throttle > 0 ? ENGINE_ACCEL : REVERSE_ACCEL
+        const desired = THREE.MathUtils.clamp(
+          forwardSpeed + throttle * accel * dt,
+          -MAX_REVERSE_SPEED,
+          MAX_SPEED,
+        )
+        const impulse = (desired - forwardSpeed) * mass
+        body.applyImpulse(
+          { x: forward.x * impulse, y: 0, z: forward.z * impulse },
+          true,
+        )
       }
 
       // ─── Сцепление: гасим боковое скольжение ─────────────────────────────
