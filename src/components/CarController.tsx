@@ -20,11 +20,7 @@ const EXIT_OFFSET = 0.75
  * при отскоке от бордюра она дребезжит, и руль дёргается вместо поворота.
  */
 const GEAR_SPEED = 2.5
-/**
- * Сколько секунд машина должна ехать назад, чтобы переключилась передача, с.
- * Короткий отскок (разворот на месте, отскок от бордюра) передачу не меняет.
- */
-const GEAR_SWITCH_DELAY = 0.5
+
 /**
  * Сколько секунд руль может молчать, прежде чем курс доводится кодом, с.
  * Нужно, когда контакт (бордюр, стена) гасит момент и руль «умирает».
@@ -273,8 +269,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   }, [indexById, respawnCar])
   /** Направление руля: 1 — вперёд, -1 — назад. Меняется с запасом по скорости. */
   const steerDirection = useRef(1)
-  /** Сколько секунд машина едет назад подряд — для переключения передачи. */
-  const reverseTimer = useRef(0)
+
   /** Сколько секунд руль не может провернуть кузов (мешает контакт). */
   const stuckTimer = useRef(0)
   /** До какого момента (мс) печатаем angVel в консоль — 1 с после нажатия A/D. */
@@ -533,28 +528,15 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         1,
       )
 
-      // Передача: 1 — вперёд, -1 — назад. Задаётся газом, а переключение
-      // проходит через «нейтраль»: пока машина едет в одну сторону, руль
-      // не переворачивается. Ориентироваться только на знак скорости нельзя
-      // — на месте и после отскока от бордюра она дребезжит, и руль вместо
-      // поворота начинает дёргаться туда-сюда.
-      if (throttle > 0 && forwardSpeed > -GEAR_SPEED) {
+      // Передача: 1 — вперёд, -1 — назад. Задаётся ТОЛЬКО газом. Ориентироваться
+      // на знак скорости нельзя: в заносе и при развороте скорость относительно
+      // кузова меняет знак, и рулём начинает крутить в другую сторону — машина
+      // едет, а руль «не реагирует». Задний ход включается, когда машина уже
+      // едет назад или стоит: S на скорости не должен переворачивать руль.
+      if (throttle > 0) {
         steerDirection.current = 1
-        reverseTimer.current = 0
       } else if (throttle < 0 && forwardSpeed < GEAR_SPEED) {
         steerDirection.current = -1
-        reverseTimer.current = 0
-      } else if (forwardSpeed > GEAR_SPEED) {
-        steerDirection.current = 1
-        reverseTimer.current = 0
-      } else if (forwardSpeed < -GEAR_SPEED) {
-        // Откат назад держим какое-то время: короткий отскок (например, при
-        // развороте на месте) передачу переключать не должен — иначе руль
-        // развернётся на полоборота.
-        reverseTimer.current += sdt
-        if (reverseTimer.current > GEAR_SWITCH_DELAY) steerDirection.current = -1
-      } else {
-        reverseTimer.current = 0
       }
       const direction = steerDirection.current
 
