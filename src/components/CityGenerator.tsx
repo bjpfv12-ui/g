@@ -136,9 +136,6 @@ export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }
     add('canopies', data.treeCanopies)
     add('palmTrunks', data.palmTrunks)
     add('palmFronds', data.palmFronds)
-    add('carBodies', data.carBodies)
-    add('carRoofs', data.carRoofs)
-    add('carWheels', data.carWheels)
     add('lampPoles', data.lampPoles)
     add('lampHeads', data.lampHeads)
     add('marks', data.yellowMarks)
@@ -266,17 +263,6 @@ export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }
         />
       </ChunkLayer>
 
-      {/* Машины */}
-      <ChunkLayer chunks={group('carBodies')} geometry={geometries.box}>
-        <meshStandardMaterial vertexColors roughness={0.42} metalness={0.35} />
-      </ChunkLayer>
-      <ChunkLayer chunks={group('carRoofs')} geometry={geometries.box}>
-        <meshStandardMaterial vertexColors roughness={0.25} metalness={0.5} />
-      </ChunkLayer>
-      <ChunkLayer chunks={group('carWheels')} geometry={geometries.cylinder}>
-        <meshStandardMaterial vertexColors roughness={0.95} />
-      </ChunkLayer>
-
       {/* Фонари */}
       <ChunkLayer chunks={group('lampPoles')} geometry={geometries.cylinder}>
         <meshStandardMaterial vertexColors roughness={0.7} metalness={0.4} />
@@ -340,15 +326,6 @@ export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }
               building.position[1] + building.size[1] / 2,
               building.position[2],
             ]}
-          />
-        ))}
-
-        {data.carBodies.map((car, index) => (
-          <CuboidCollider
-            key={`c-${index}`}
-            args={[car.size[0] / 2, car.size[1] / 2, car.size[2] / 2]}
-            position={car.position}
-            rotation={[0, typeof car.rotation === 'number' ? car.rotation : (car.rotation?.[1] ?? 0), 0]}
           />
         ))}
 

@@ -10,6 +10,7 @@ import { Speedometer } from './Speedometer'
 export function Hud() {
   const pointerLocked = useInputStore((state) => state.pointerLocked)
   const doorPrompt = useUiStore((state) => state.doorPrompt)
+  const carPrompt = useUiStore((state) => state.carPrompt)
   const [telemetry, setTelemetry] = useState({ x: 0, z: 0, speed: 0, grounded: true })
 
   useEffect(() => {
@@ -54,10 +55,13 @@ export function Hud() {
           <b>Shift</b> бег
         </span>
         <span>
-          <b>Space</b> прыжок
+          <b>Space</b> прыжок / тормоз
         </span>
         <span>
           <b>E</b> дверь
+        </span>
+        <span>
+          <b>F</b> сесть / выйти
         </span>
         <span>
           <b>Мышь</b> камера
@@ -80,7 +84,9 @@ export function Hud() {
         </div>
       </div>
 
-      {doorPrompt && <div className="hud__prompt">{doorPrompt}</div>}
+      {carPrompt || doorPrompt ? (
+        <div className="hud__prompt">{carPrompt || doorPrompt}</div>
+      ) : null}
 
       {!pointerLocked && (
         <div className="hud__overlay">

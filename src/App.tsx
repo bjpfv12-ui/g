@@ -5,6 +5,7 @@ import { Sky, Environment } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
 import { CityGenerator } from './components/CityGenerator'
 import { PlayerController } from './components/PlayerController'
+import { CarController } from './components/CarController'
 import { CameraFollow } from './components/CameraFollow'
 import { Traffic } from './components/Traffic'
 import { Pedestrians } from './components/Pedestrians'
@@ -138,6 +139,7 @@ export default function App() {
 
         <Physics gravity={[0, GRAVITY, 0]} interpolate>
           <CityGenerator config={DEFAULT_CITY} />
+          <CarController config={DEFAULT_CITY} />
           <Traffic config={DEFAULT_CITY} />
           <Pedestrians config={DEFAULT_CITY} />
           <Doors config={DEFAULT_CITY} />

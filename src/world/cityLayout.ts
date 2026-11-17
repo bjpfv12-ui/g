@@ -19,6 +19,25 @@ export interface BlockDef {
   isPark: boolean
 }
 
+/**
+ * Припаркованная машина — собственное физическое тело, поэтому описываем её
+ * целиком, а не набором инстансов.
+ */
+export interface ParkedCarDef {
+  /** Центр кузова в мировых координатах. */
+  position: [number, number, number]
+  /** Поворот кузова вокруг Y, радианы. Локальная ось +Z — вперёд. */
+  yaw: number
+  /** Габариты кузова: ширина, высота, длина, м. */
+  width: number
+  height: number
+  length: number
+  /** Цвет кузова. */
+  color: string
+  /** Направление от осевой линии дороги к бордюру — с этой стороны дверь. */
+  curbDir: [number, number]
+}
+
 export interface CityData {
   blocks: BlockDef[]
   buildings: BuildingDef[]
@@ -36,9 +55,8 @@ export interface CityData {
   treeCanopies: BoxDef[]
   palmTrunks: BoxDef[]
   palmFronds: BoxDef[]
-  carBodies: BoxDef[]
-  carRoofs: BoxDef[]
-  carWheels: BoxDef[]
+  /** Припаркованные машины — их рендерит и физику ведёт CarController. */
+  parkedCars: ParkedCarDef[]
   yellowMarks: BoxDef[]
   whiteMarks: BoxDef[]
   parkSlabs: BoxDef[]
@@ -171,9 +189,7 @@ export function generateCity(config: CityConfig = DEFAULT_CITY): CityData {
     treeCanopies: [],
     palmTrunks: [],
     palmFronds: [],
-    carBodies: [],
-    carRoofs: [],
-    carWheels: [],
+    parkedCars: [],
     yellowMarks: [],
     whiteMarks: [],
     parkSlabs: [],
@@ -436,14 +452,21 @@ export function generateCity(config: CityConfig = DEFAULT_CITY): CityData {
   }
 
   // ─── Припаркованные машины ──────────────────────────────────────────────────
-  // Статичные, с колёсами-цилиндрами; коллайдеры добавляются в CityGenerator.
+  // Каждая машина — отдельное физическое тело: её можно сесть и увести.
   const carStep = cfg.parkedCarStep
   for (const x of roadLines) {
     if (Math.abs(x) > halfExtent - cfg.roadWidth) continue
     for (let z = roadStart + 10; z < roadEnd; z += carStep) {
       if (rng() > cfg.parkedCarChance) continue
       const side = rng() > 0.5 ? 1 : -1
-      pushCar(data, x + side * (cfg.roadWidth / 2 - 1.6), z, side === 1 ? 0 : Math.PI, rng)
+      pushCar(
+        data,
+        x + side * (cfg.roadWidth / 2 - 1.6),
+        z,
+        side === 1 ? 0 : Math.PI,
+        [side, 0],
+        rng,
+      )
     }
   }
   for (const z of roadLines) {
@@ -451,7 +474,14 @@ export function generateCity(config: CityConfig = DEFAULT_CITY): CityData {
     for (let x = roadStart + 10; x < roadEnd; x += carStep) {
       if (rng() > cfg.parkedCarChance) continue
       const side = rng() > 0.5 ? 1 : -1
-      pushCar(data, x, z + side * (cfg.roadWidth / 2 - 1.6), side === 1 ? Math.PI / 2 : -Math.PI / 2, rng)
+      pushCar(
+        data,
+        x,
+        z + side * (cfg.roadWidth / 2 - 1.6),
+        side === 1 ? Math.PI / 2 : -Math.PI / 2,
+        [0, side],
+        rng,
+      )
     }
   }
 
@@ -527,48 +557,23 @@ function pushCar(
   x: number,
   z: number,
   rotation: number,
+  curbDir: [number, number],
   rng: () => number,
 ): void {
   const color = pick(rng, CAR_COLORS)
   const bodyLength = 4.2 + rng() * 0.8
   const bodyWidth = 1.85
   const bodyHeight = 0.85
-  // Локальная ось +Z после поворота на Y.
-  const dirX = Math.sin(rotation)
-  const dirZ = Math.cos(rotation)
-  // Смещение кабины к передней части кузова.
-  const cabinOffset = 0.35
 
-  data.carBodies.push({
+  data.parkedCars.push({
     position: [x, bodyHeight / 2, z],
-    size: [bodyWidth, bodyHeight, bodyLength],
+    yaw: rotation,
+    width: bodyWidth,
+    height: bodyHeight,
+    length: bodyLength,
     color,
-    rotation,
+    curbDir,
   })
-  data.carRoofs.push({
-    position: [x + dirX * cabinOffset, bodyHeight + 0.42, z + dirZ * cabinOffset],
-    size: [bodyWidth * 0.86, 0.72, bodyLength * 0.46],
-    color: '#2b3036',
-    rotation,
-  })
-
-  // Колёса: цилиндры, ось направлена поперёк кузова.
-  const rightX = Math.cos(rotation)
-  const rightZ = -Math.sin(rotation)
-  for (const side of [-1, 1]) {
-    for (const along of [-1, 1]) {
-      data.carWheels.push({
-        position: [
-          x + rightX * side * (bodyWidth / 2 - 0.08) + dirX * along * (bodyLength / 2 - 1),
-          0.34,
-          z + rightZ * side * (bodyWidth / 2 - 0.08) + dirZ * along * (bodyLength / 2 - 1),
-        ],
-        size: [0.64, 0.3, 0.64],
-        color: '#1c1f24',
-        rotation: [0, rotation, Math.PI / 2],
-      })
-    }
-  }
 }
 
 function addWindows(

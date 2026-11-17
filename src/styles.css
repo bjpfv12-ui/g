@@ -171,6 +171,25 @@ body {
   color: rgba(247, 236, 224, 0.5);
 }
 
+/* Шкала скорости под цифрами спидометра */
+.hud__speedBar {
+  display: block;
+  width: 100%;
+  height: 3px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: rgba(247, 236, 224, 0.16);
+  overflow: hidden;
+}
+
+.hud__speedFill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  background: var(--accent);
+}
+
 .minimap {
   display: block;
   border: 1px solid var(--line);

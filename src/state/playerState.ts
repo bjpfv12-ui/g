@@ -12,6 +12,8 @@ export const playerState = {
   /** Горизонтальная скорость, м/с — для HUD и анимации шага. */
   speed: 0,
   grounded: true,
+  /** Игрок за рулём: персонаж скрыт, скорость принадлежит машине. */
+  driving: false,
   /** Тело игрока — камера исключает его из своих лучей. */
   body: null as RapierRigidBody | null,
 }
