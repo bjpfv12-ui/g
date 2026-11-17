@@ -58,6 +58,8 @@ const carDebug = {
   currentCarId: null as string | null,
   speed: 0,
   throttle: 0,
+  /** Позиции припаркованных машин — удобно для отладки и автотестов. */
+  parked: [] as { x: number; z: number }[],
 }
 
 if (import.meta.env.DEV) {
