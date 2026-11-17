@@ -52,7 +52,7 @@ export function Hud() {
           <b>W/S</b> движение
         </span>
         <span>
-          <b>A/D</b> поворот
+          <b>A/D</b> {TUNING.controlMode === 'body' ? 'поворот' : 'шаг вбок'}
         </span>
         <span>
           <b>Shift</b> бег
