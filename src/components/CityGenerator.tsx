@@ -1,9 +1,11 @@
-import { useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, type ReactNode } from 'react'
 import * as THREE from 'three'
+import { useFrame, useThree } from '@react-three/fiber'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { DEFAULT_CITY, type CityConfig } from '../world/cityConfig'
 import { generateCity, type BoxDef } from '../world/cityLayout'
 import { createAsphaltTexture, createGroundTexture } from '../world/textures'
+import { timeState } from '../state/timeState'
 import { Instances, withVertexColors, type InstanceItem } from './Instances'
 
 /** Сколько кварталов умещается в один чанк (влияет на frustum culling). */
@@ -15,7 +17,9 @@ interface ChunkLayerProps {
   geometry: THREE.BufferGeometry
   castShadow?: boolean
   receiveShadow?: boolean
-  children: ReactNode
+  /** Готовый материал — один на все чанки слоя. */
+  material?: THREE.Material
+  children?: ReactNode
 }
 
 function ChunkLayer({
@@ -23,6 +27,7 @@ function ChunkLayer({
   geometry,
   castShadow = true,
   receiveShadow = true,
+  material,
   children,
 }: ChunkLayerProps) {
   return (
@@ -35,7 +40,7 @@ function ChunkLayer({
           castShadow={castShadow}
           receiveShadow={receiveShadow}
         >
-          {children}
+          {material ? <primitive object={material} attach="material" /> : children}
         </Instances>
       ))}
     </>
@@ -44,11 +49,45 @@ function ChunkLayer({
 
 export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }) {
   const data = useMemo(() => generateCity(config), [config])
+  const { scene } = useThree()
+
+  /**
+   * Стеклу нужна собственная карта окружения: three берёт envMapIntensity
+   * материала только если envMap задан на самом материале, а из scene.environment
+   * он подставляет общий scene.environmentIntensity. Так окна отражают небо
+   * в полную силу, а весь остальной город берёт приглушённое небо.
+   *
+   * Материал общий для всех чанков слоя — иначе каждый чанк создал бы свой.
+   */
+  const glassMaterial = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        roughness: 0.1,
+        metalness: 0.9,
+        envMapIntensity: 1.6,
+      }),
+    [],
+  )
+
+  useEffect(() => () => glassMaterial.dispose(), [glassMaterial])
+
+  useFrame(() => {
+    if (scene.environment && glassMaterial.envMap !== scene.environment) {
+      glassMaterial.envMap = scene.environment
+      glassMaterial.needsUpdate = true
+    }
+    // Ночью стекло перестаёт отражать яркое небо.
+    glassMaterial.envMapIntensity = 1.6 * (0.06 + 0.94 * timeState.daylight)
+  })
 
   const geometries = useMemo(
     () => ({
       box: withVertexColors(new THREE.BoxGeometry(1, 1, 1)),
       canopy: withVertexColors(new THREE.IcosahedronGeometry(1, 0)),
+      cylinder: withVertexColors(new THREE.CylinderGeometry(1, 1, 1, 10)),
+      tapered: withVertexColors(new THREE.CylinderGeometry(0.68, 1, 1, 8)),
+      sphere: withVertexColors(new THREE.SphereGeometry(0.5, 12, 10)),
     }),
     [],
   )
@@ -85,17 +124,21 @@ export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }
           scale: def.size,
           color: def.color,
           rotation: def.rotation,
-        })
-      }
+        })      }
     }
     add('buildings', data.buildings)
     add('parapets', data.parapets)
     add('roofProps', data.roofProps)
+    add('roofAntennas', data.roofAntennas)
     add('windows', data.windows)
+    add('litWindows', data.litWindows)
     add('trees', data.treeTrunks)
     add('canopies', data.treeCanopies)
+    add('palmTrunks', data.palmTrunks)
+    add('palmFronds', data.palmFronds)
     add('carBodies', data.carBodies)
     add('carRoofs', data.carRoofs)
+    add('carWheels', data.carWheels)
     add('lampPoles', data.lampPoles)
     add('lampHeads', data.lampHeads)
     add('marks', data.yellowMarks)
@@ -139,13 +182,13 @@ export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }
       {data.roadLines.map((x) => (
         <mesh key={`rz-${x}`} position={[x, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[config.roadWidth, data.extent]} />
-          <meshStandardMaterial map={textures.alongZ} roughness={0.97} metalness={0} />
+          <meshStandardMaterial map={textures.alongZ} roughness={0.95} metalness={0} />
         </mesh>
       ))}
       {data.roadLines.map((z) => (
         <mesh key={`rx-${z}`} position={[0, 0, z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[data.extent, config.roadWidth]} />
-          <meshStandardMaterial map={textures.alongX} roughness={0.97} metalness={0} />
+          <meshStandardMaterial map={textures.alongX} roughness={0.95} metalness={0} />
         </mesh>
       ))}
 
@@ -156,7 +199,7 @@ export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }
 
       {/* Здания */}
       <ChunkLayer chunks={group('buildings')} geometry={geometries.box}>
-        <meshStandardMaterial vertexColors roughness={0.88} metalness={0.05} />
+        <meshStandardMaterial vertexColors roughness={0.9} metalness={0.1} />
       </ChunkLayer>
 
       {/* Парапеты и кровля */}
@@ -166,15 +209,34 @@ export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }
       <ChunkLayer chunks={group('roofProps')} geometry={geometries.box}>
         <meshStandardMaterial vertexColors roughness={0.85} metalness={0.2} />
       </ChunkLayer>
+      <ChunkLayer chunks={group('roofAntennas')} geometry={geometries.cylinder}>
+        <meshStandardMaterial vertexColors roughness={0.6} metalness={0.55} />
+      </ChunkLayer>
 
-      {/* Окна — MeshBasic, чтобы «светящиеся» окна не зависели от освещения */}
+      {/* Тёмное стекло: гладкое и отражающее — в окнах видно небо */}
       <ChunkLayer
         chunks={group('windows')}
+        geometry={geometries.box}
+        material={glassMaterial}
+        castShadow={false}
+        receiveShadow={false}
+      />
+
+      {/* Светящиеся окна: emissive заставляет их светиться и ловить bloom */}
+      <ChunkLayer
+        chunks={group('litWindows')}
         geometry={geometries.box}
         castShadow={false}
         receiveShadow={false}
       >
-        <meshBasicMaterial vertexColors toneMapped={false} />
+        <meshStandardMaterial
+          vertexColors
+          emissive="#ffb765"
+          emissiveIntensity={20}
+          roughness={0.35}
+          metalness={0.1}
+         
+        />
       </ChunkLayer>
 
       {/* Зелень парков */}
@@ -190,6 +252,20 @@ export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }
         <meshStandardMaterial vertexColors roughness={0.95} flatShading />
       </ChunkLayer>
 
+      {/* Пальмы */}
+      <ChunkLayer chunks={group('palmTrunks')} geometry={geometries.tapered}>
+        <meshStandardMaterial vertexColors roughness={0.95} flatShading />
+      </ChunkLayer>
+      <ChunkLayer chunks={group('palmFronds')} geometry={geometries.canopy}>
+        <meshStandardMaterial
+          vertexColors
+          roughness={0.9}
+          flatShading
+          side={THREE.DoubleSide}
+         
+        />
+      </ChunkLayer>
+
       {/* Машины */}
       <ChunkLayer chunks={group('carBodies')} geometry={geometries.box}>
         <meshStandardMaterial vertexColors roughness={0.42} metalness={0.35} />
@@ -197,18 +273,27 @@ export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }
       <ChunkLayer chunks={group('carRoofs')} geometry={geometries.box}>
         <meshStandardMaterial vertexColors roughness={0.25} metalness={0.5} />
       </ChunkLayer>
+      <ChunkLayer chunks={group('carWheels')} geometry={geometries.cylinder}>
+        <meshStandardMaterial vertexColors roughness={0.95} />
+      </ChunkLayer>
 
       {/* Фонари */}
-      <ChunkLayer chunks={group('lampPoles')} geometry={geometries.box}>
+      <ChunkLayer chunks={group('lampPoles')} geometry={geometries.cylinder}>
         <meshStandardMaterial vertexColors roughness={0.7} metalness={0.4} />
       </ChunkLayer>
       <ChunkLayer
         chunks={group('lampHeads')}
-        geometry={geometries.box}
+        geometry={geometries.sphere}
         castShadow={false}
         receiveShadow={false}
       >
-        <meshBasicMaterial vertexColors toneMapped={false} />
+        <meshStandardMaterial
+          vertexColors
+          emissive="#ffcf96"
+          emissiveIntensity={16}
+          roughness={0.4}
+          metalness={0}
+        />
       </ChunkLayer>
 
       {/* Разметка */}
@@ -263,7 +348,7 @@ export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }
             key={`c-${index}`}
             args={[car.size[0] / 2, car.size[1] / 2, car.size[2] / 2]}
             position={car.position}
-            rotation={[0, car.rotation ?? 0, 0]}
+            rotation={[0, typeof car.rotation === 'number' ? car.rotation : (car.rotation?.[1] ?? 0), 0]}
           />
         ))}
 

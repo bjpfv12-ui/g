@@ -25,6 +25,16 @@ export interface CityConfig {
   windowSpacing: number
   /** Радиус внешнего кольца «дальнего скайлайна», м. */
   skylineRadius: number
+  /**
+   * Шаг между местами парковки вдоль дороги, м.
+   * Меньше шаг — плотнее припаркованные машины.
+   */
+  parkedCarStep: number
+  /**
+   * Вероятность, что место парковки занято, 0..1.
+   * В сумме с шагом задаёт количество машин на улицах.
+   */
+  parkedCarChance: number
 }
 
 export const DEFAULT_CITY: CityConfig = {
@@ -41,6 +51,11 @@ export const DEFAULT_CITY: CityConfig = {
   floorHeight: 3.6,
   windowSpacing: 4.4,
   skylineRadius: 420,
+  // Припаркованные машины: место каждые 16 м, занято в 28 % случаев.
+  // Чтобы получить редкие 5–10 машин на всю улицу, поднимите шаг
+  // и опустите вероятность, например step: 160, chance: 0.1.
+  parkedCarStep: 16,
+  parkedCarChance: 0.28,
 }
 
 /** Высота игрока (рост капсулы), м. */

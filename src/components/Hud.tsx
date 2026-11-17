@@ -3,6 +3,8 @@ import { useInputStore } from '../store/InputStore'
 import { useUiStore } from '../store/UiStore'
 import { playerState } from '../state/playerState'
 import { Minimap } from './Minimap'
+import { Clock } from './Clock'
+import { Speedometer } from './Speedometer'
 
 /** Живой HUD: координаты и скорость обновляются раз в 100 мс, без ре-рендера сцены. */
 export function Hud() {
@@ -66,6 +68,10 @@ export function Hud() {
       </div>
 
       <div className="hud__map">
+        <div className="hud__gauges">
+          <Clock />
+          <Speedometer />
+        </div>
         <Minimap />
         <div className="hud__mapLegend">
           <span className="hud__dot hud__dot--player" />

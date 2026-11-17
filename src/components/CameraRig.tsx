@@ -13,6 +13,8 @@ const HEIGHT_OFFSET = 0.58
 const SHOULDER_OFFSET = 0.55
 const BASE_FOV = 66
 const SPRINT_FOV = 74
+/** Минимальная высота камеры над землёй, м. */
+const GROUND_CLEARANCE = 0.9
 
 const target = new THREE.Vector3()
 const desired = new THREE.Vector3()
@@ -30,6 +32,16 @@ export function CameraRig() {
     const input = useInputStore.getState()
     const mouse = input.consumeMouseDelta()
     const cam = useCameraStore.getState()
+
+    // Dev-переопределение: свободная камера для обзорных снимков (скрипты).
+    if (import.meta.env.DEV) {
+      const free = (globalThis as { __freeCam?: { pos: number[]; look: number[] } }).__freeCam
+      if (free) {
+        camera.position.set(free.pos[0], free.pos[1], free.pos[2])
+        camera.lookAt(free.look[0], free.look[1], free.look[2])
+        return
+      }
+    }
 
     // ─── Орбита мышью ─────────────────────────────────────────────────────────
     if (mouse.x !== 0 || mouse.y !== 0) {
@@ -89,6 +101,9 @@ export function CameraRig() {
         desired.copy(target).addScaledVector(direction, safe)
       }
     }
+
+    // Камера не проваливается под землю, даже если смотреть сильно вверх.
+    desired.y = Math.max(desired.y, GROUND_CLEARANCE)
 
     // ─── Сглаживание ─────────────────────────────────────────────────────────
     const lambda = 12

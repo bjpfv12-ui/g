@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Sky } from '@react-three/drei'
+import { Canvas, useThree } from '@react-three/fiber'
+import { Sky, Environment } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
 import { CityGenerator } from './components/CityGenerator'
 import { PlayerController } from './components/PlayerController'
@@ -9,15 +9,19 @@ import { CameraRig } from './components/CameraRig'
 import { Traffic } from './components/Traffic'
 import { Pedestrians } from './components/Pedestrians'
 import { Doors } from './components/Doors'
+import { Clouds } from './components/Clouds'
+import { DayNight } from './components/DayNight'
+import { PostFX } from './components/PostFX'
 import { Hud } from './components/Hud'
 import { releaseAllKeys, useInputStore } from './store/InputStore'
-import { playerState } from './state/playerState'
 import { DEFAULT_CITY } from './world/cityConfig'
 import { getSpawnPoint } from './world/cityLayout'
 
-const SUN_ELEVATION = 0.27
-const SUN_AZIMUTH = -1.74
 const GRAVITY = -22
+
+/** Стартовое положение солнца — совпадает с 8:00 в цикле суток. */
+const SUN_ELEVATION = 0.62
+const SUN_AZIMUTH = -0.4
 
 const SUN_DIRECTION = new THREE.Vector3(
   Math.cos(SUN_ELEVATION) * Math.sin(SUN_AZIMUTH),
@@ -25,76 +29,32 @@ const SUN_DIRECTION = new THREE.Vector3(
   Math.cos(SUN_ELEVATION) * Math.cos(SUN_AZIMUTH),
 ).normalize()
 
-/** Направленный свет, который едет за игроком: тени остаются резкими. */
-function SunLight() {
-  const light = useRef<THREE.DirectionalLight>(null)
-  const target = useMemo(() => new THREE.Object3D(), [])
-  const { scene } = useThree()
-
+/** Dev-проба: отдаёт наружу рендерер, сцену и камеру для диагностики из тестов. */
+function DevProbe() {
+  const gl = useThree((state) => state.gl)
+  const scene = useThree((state) => state.scene)
+  const camera = useThree((state) => state.camera)
   useEffect(() => {
-    scene.add(target)
-    return () => {
-      scene.remove(target)
+    if (!import.meta.env.DEV) return
+    const target = globalThis as unknown as {
+      __gl: THREE.WebGLRenderer
+      __scene: THREE.Scene
+      __camera: THREE.Camera
     }
-  }, [scene, target])
-
-  useFrame(() => {
-    const lightRef = light.current
-    if (!lightRef) return
-    const p = playerState.position
-    lightRef.position.set(
-      p.x + SUN_DIRECTION.x * 140,
-      SUN_DIRECTION.y * 140,
-      p.z + SUN_DIRECTION.z * 140,
-    )
-    target.position.set(p.x, 0, p.z)
-    target.updateMatrixWorld()
-  })
-
-  return (
-    <directionalLight
-      ref={light}
-      target={target}
-      color="#ffc182"
-      intensity={4.2}
-      castShadow
-      shadow-mapSize-width={2048}
-      shadow-mapSize-height={2048}
-      shadow-bias={-0.0004}
-      shadow-normalBias={0.035}
-    >
-      <orthographicCamera attach="shadow-camera" args={[-85, 85, 85, -85, 1, 420]} />
-    </directionalLight>
-  )
+    target.__gl = gl
+    target.__scene = scene
+    target.__camera = camera
+  }, [gl, scene, camera])
+  return null
 }
 
-/** Холодная подсветка с теневой стороны — не даёт затенённым фасадам «схлопнуться». */
-function FillLight() {
-  const light = useRef<THREE.DirectionalLight>(null)
-  const target = useMemo(() => new THREE.Object3D(), [])
-  const { scene } = useThree()
-
-  useEffect(() => {
-    scene.add(target)
-    return () => {
-      scene.remove(target)
-    }
-  }, [scene, target])
-
-  useFrame(() => {
-    const lightRef = light.current
-    if (!lightRef) return
-    const p = playerState.position
-    lightRef.position.set(p.x - SUN_DIRECTION.x * 120, 90, p.z - SUN_DIRECTION.z * 120)
-    target.position.set(p.x, 0, p.z)
-    target.updateMatrixWorld()
-  })
-
-  return (
-    <directionalLight ref={light} target={target} color="#9db9dd" intensity={0.75} />
-  )
-}
-
+/**
+ * Небо-карта окружения светит на всю сцену сразу — приглушаем её глобально.
+ * Стекло получает собственную карту (см. CityGenerator), поэтому отражает
+ * небо в полную силу, а бетон и асфальт не уходят в синеву.
+ *
+ * Саму интенсивность меняет DayNight вместе со временем суток.
+ */
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null)
   const spawn = useMemo(() => getSpawnPoint(DEFAULT_CITY), [])
@@ -154,24 +114,27 @@ export default function App() {
         gl={{
           antialias: true,
           powerPreference: 'high-performance',
-          toneMappingExposure: 1.25,
+          toneMappingExposure: 1.08,
         }}
       >
-        <color attach="background" args={['#e6c49a']} />
-        <fog attach="fog" args={['#e3c49b', 150, 900]} />
+        {/* День и ночь: солнце, небо, туман и ambient живут здесь. */}
+        <DayNight />
 
-        <Sky
-          distance={2000}
-          sunPosition={SUN_DIRECTION.clone().multiplyScalar(1000)}
-          turbidity={9}
-          rayleigh={1.2}
-          mieCoefficient={0.009}
-          mieDirectionalG={0.86}
-        />
+        {/* Окружение-карта: снимаем небо в кубическую карту, чтобы стекло
+            и кузова отражали настоящее небо, а не чёрный цвет. */}
+        <Environment resolution={64} frames={1} near={0.1} far={5000}>
+          <Sky
+            distance={1000}
+            sunPosition={SUN_DIRECTION.clone().multiplyScalar(1000)}
+            turbidity={3.2}
+            rayleigh={1.6}
+            mieCoefficient={0.006}
+            mieDirectionalG={0.8}
+          />
+        </Environment>
 
-        <hemisphereLight args={['#b6cbe8', '#8a7358', 0.85]} />
-        <SunLight />
-        <FillLight />
+        <Clouds />
+        <DevProbe />
 
         <Physics gravity={[0, GRAVITY, 0]} interpolate>
           <CityGenerator config={DEFAULT_CITY} />
@@ -181,6 +144,8 @@ export default function App() {
           <PlayerController spawn={spawn} />
           <CameraRig />
         </Physics>
+
+        <PostFX />
       </Canvas>
 
       <Hud />

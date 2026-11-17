@@ -23,3 +23,9 @@ export const useCameraStore = create<CameraState>((set) => ({
   setPitch: (pitch) => set({ pitch }),
   setDistance: (distance) => set({ distance }),
 }))
+
+// Dev-хук: позволяет из devtools/теста выставлять ракурс камеры.
+if (import.meta.env.DEV) {
+  ;(globalThis as unknown as { __cameraStore: typeof useCameraStore }).__cameraStore =
+    useCameraStore
+}

@@ -6,6 +6,7 @@ import { generateCity, mulberry32, type BuildingDef } from '../world/cityLayout'
 import { useInputStore } from '../store/InputStore'
 import { useUiStore } from '../store/UiStore'
 import { playerState } from '../state/playerState'
+import { worldState } from '../state/worldState'
 import { withVertexColors } from './Instances'
 
 const MAX_DOORS = 26
@@ -209,10 +210,12 @@ export function Doors({ config = DEFAULT_CITY }: { config?: CityConfig }) {
     const px = playerState.position.x
     const pz = playerState.position.z
 
+    worldState.doors.length = 0
     let nearest: Door | null = null
     let nearestDistance = INTERACT_RADIUS
 
     for (const door of doors) {
+      worldState.doors.push({ x: door.x, z: door.z })
       const dx = door.x - px
       const dz = door.z - pz
       const distance = Math.hypot(dx, dz)
@@ -255,7 +258,13 @@ export function Doors({ config = DEFAULT_CITY }: { config?: CityConfig }) {
         <meshStandardMaterial vertexColors roughness={0.7} />
       </instancedMesh>
       <instancedMesh ref={lightRef} args={[geometry, undefined, MAX_DOORS]}>
-        <meshBasicMaterial vertexColors toneMapped={false} />
+        <meshStandardMaterial
+          vertexColors
+          emissive="#ffcf96"
+          emissiveIntensity={14}
+          roughness={0.4}
+          metalness={0}
+        />
       </instancedMesh>
 
       {doors.map((door, index) => (

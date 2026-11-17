@@ -33,7 +33,10 @@ page.on('console', (msg) => {
 })
 page.on('pageerror', (err) => logs.push(`[pageerror] ${err.message}`))
 
-await page.goto(URL, { waitUntil: 'networkidle2', timeout: 60000 })
+await page.goto(URL, {
+  waitUntil: 'domcontentloaded',
+  timeout: 120000,
+})
 
 // Прячем оверлей паузы, чтобы видеть саму сцену.
 await page.addStyleTag({ content: '.hud__overlay{display:none !important}' })
@@ -45,28 +48,30 @@ const readTelemetry = () =>
   })
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+// FAST=1 — только один скриншот (SwiftShader рендерит очень медленно).
+const FAST = process.env.FAST === '1'
 
 await wait(4000)
 console.log('SPAWN   :', await readTelemetry())
-await page.screenshot({ path: `${OUT}\\shot-idle.png` })
+if (!FAST) await page.screenshot({ path: `${OUT}\\shot-idle.png` })
 
 // Идём вперёд (относительно камеры) и бежим.
 await page.keyboard.down('KeyW')
 await wait(1600)
-await page.screenshot({ path: `${OUT}\\shot-walk.png` })
+if (!FAST) await page.screenshot({ path: `${OUT}\\shot-walk.png` })
 console.log('WALK    :', await readTelemetry())
 
 await page.keyboard.down('ShiftLeft')
 await wait(1600)
 console.log('SPRINT  :', await readTelemetry())
-await page.screenshot({ path: `${OUT}\\shot-sprint.png` })
+if (!FAST) await page.screenshot({ path: `${OUT}\\shot-sprint.png` })
 await page.keyboard.up('ShiftLeft')
 await page.keyboard.up('KeyW')
 
 // Прыжок.
 await page.keyboard.press('Space')
 await wait(350)
-await page.screenshot({ path: `${OUT}\\shot-jump.png` })
+if (!FAST) await page.screenshot({ path: `${OUT}\\shot-jump.png` })
 console.log('JUMP    :', await readTelemetry())
 
 // Стенана: идём влево-вперёд и проверяем, что камера не уходит в стены.
@@ -74,7 +79,7 @@ await page.keyboard.down('KeyA')
 await wait(1200)
 await page.keyboard.up('KeyA')
 await wait(500)
-await page.screenshot({ path: `${OUT}\\shot-strafe.png` })
+if (!FAST) await page.screenshot({ path: `${OUT}\\shot-strafe.png` })
 console.log('STRAFE  :', await readTelemetry())
 
 const fps = await page.evaluate(
@@ -117,6 +122,37 @@ const doorPrompt = await page.evaluate(
   () => document.querySelector('.hud__prompt')?.textContent ?? 'нет подсказки',
 )
 console.log('DOOR    :', doorPrompt)
+
+// Телепорт к ближайшей двери и проверка подсказки + открывания.
+const doorTest = await page.evaluate(async () => {
+  const state = window.__worldState
+  const player = window.__playerState
+  if (!state || !player || !state.doors.length) return { error: 'нет данных о дверях' }
+
+  const door = state.doors[0]
+  const body = player.body
+  if (!body) return { error: 'нет тела игрока' }
+
+  // Встаём в 2 метрах от двери, на тротуаре.
+  body.setTranslation({ x: door.x + 1.6, y: 2.2, z: door.z + 1.6 }, true)
+  await new Promise((r) => setTimeout(r, 1200))
+  return { door: { x: +door.x.toFixed(1), z: +door.z.toFixed(1) } }
+})
+console.log('ДВЕРЬ   :', JSON.stringify(doorTest))
+
+await wait(1500)
+const promptNear = await page.evaluate(
+  () => document.querySelector('.hud__prompt')?.textContent ?? 'нет подсказки',
+)
+console.log('ПОДСКАЗКА:', promptNear)
+
+await page.keyboard.press('KeyE')
+await wait(1500)
+const promptAfter = await page.evaluate(
+  () => document.querySelector('.hud__prompt')?.textContent ?? 'нет подсказки',
+)
+console.log('ПОСЛЕ E :', promptAfter)
+await page.screenshot({ path: `${OUT}\\shot-door.png` })
 
 const minimap = await page.evaluate(() => {
   const canvas = document.querySelector('.minimap')

@@ -6,7 +6,8 @@ export interface InstanceItem {
   position: [number, number, number]
   scale: [number, number, number]
   color?: string
-  rotation?: number
+  /** Поворот: число — вокруг Y, тройка [x, y, z] — полный эйлер (порядок YXZ). */
+  rotation?: number | [number, number, number]
 }
 
 interface InstancesProps {
@@ -44,7 +45,13 @@ export function Instances({
       const item = items[i]
       position.set(item.position[0], item.position[1], item.position[2])
       scale.set(item.scale[0], item.scale[1], item.scale[2])
-      euler.set(0, item.rotation ?? 0, 0)
+      if (typeof item.rotation === 'number') {
+        euler.set(0, item.rotation, 0)
+      } else if (item.rotation) {
+        euler.set(item.rotation[0], item.rotation[1], item.rotation[2], 'YXZ')
+      } else {
+        euler.set(0, 0, 0)
+      }
       quaternion.setFromEuler(euler)
       matrix.compose(position, quaternion, scale)
       mesh.setMatrixAt(i, matrix)

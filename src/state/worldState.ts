@@ -7,6 +7,8 @@ export const worldState = {
   traffic: [] as { x: number; z: number }[],
   /** Позиции пешеходов: [{x, z}] */
   pedestrians: [] as { x: number; z: number }[],
+  /** Позиции входов (дверей): [{x, z}] */
+  doors: [] as { x: number; z: number }[],
 }
 
 // Dev-хук: позволяет из devtools/теста читать состояние мира.

@@ -15,3 +15,8 @@ export const playerState = {
   /** Тело игрока — камера исключает его из своих лучей. */
   body: null as RapierRigidBody | null,
 }
+
+// Dev-хук: позволяет из devtools/теста телепортировать игрока.
+if (import.meta.env.DEV) {
+  ;(globalThis as unknown as { __playerState: typeof playerState }).__playerState = playerState
+}

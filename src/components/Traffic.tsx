@@ -64,8 +64,13 @@ function headingFor(axis: 0 | 1, dir: 1 | -1): number {
 export function Traffic({ config = DEFAULT_CITY }: { config?: CityConfig }) {
   const bodyRef = useRef<THREE.InstancedMesh>(null)
   const roofRef = useRef<THREE.InstancedMesh>(null)
+  const wheelRef = useRef<THREE.InstancedMesh>(null)
 
   const geometry = useMemo(() => withVertexColors(new THREE.BoxGeometry(1, 1, 1)), [])
+  const wheelGeometry = useMemo(
+    () => withVertexColors(new THREE.CylinderGeometry(1, 1, 1, 10)),
+    [],
+  )
 
   const lines = useMemo(() => {
     const pitch = config.blockSize + config.roadWidth
@@ -123,12 +128,14 @@ export function Traffic({ config = DEFAULT_CITY }: { config?: CityConfig }) {
   const position = useMemo(() => new THREE.Vector3(), [])
   const scale = useMemo(() => new THREE.Vector3(1.85, 0.85, 4.3), [])
   const roofScale = useMemo(() => new THREE.Vector3(1.6, 0.72, 2), [])
+  const wheelScale = useMemo(() => new THREE.Vector3(0.32, 0.64, 0.32), [])
   const offset = useMemo(() => new THREE.Vector3(), [])
 
   useFrame((_, delta) => {
     const body = bodyRef.current
     const roof = roofRef.current
-    if (!body || !roof) return
+    const wheels = wheelRef.current
+    if (!body || !roof || !wheels) return
     const dt = Math.min(delta, 1 / 30)
 
     const px = playerState.position.x
@@ -208,6 +215,24 @@ export function Traffic({ config = DEFAULT_CITY }: { config?: CityConfig }) {
       matrix.compose(position, quaternion, roofScale)
       roof.setMatrixAt(i, matrix)
 
+      // Колёса: ось поперёк кузова.
+      const rightX = Math.cos(yaw)
+      const rightZ = -Math.sin(yaw)
+      for (let w = 0; w < 4; w++) {
+        const side = w < 2 ? -1 : 1
+        const along = w % 2 === 0 ? -1 : 1
+        position.set(
+          x + rightX * side * 0.85 + fx * along * 1.45,
+          0.34,
+          z + rightZ * side * 0.85 + fz * along * 1.45,
+        )
+        euler.set(0, yaw, Math.PI / 2)
+        quaternion.setFromEuler(euler)
+        matrix.compose(position, quaternion, wheelScale)
+        wheels.setMatrixAt(i * 4 + w, matrix)
+      }
+      quaternion.setFromEuler(euler.set(0, yaw, 0))
+
       const spot = worldState.traffic[i]
       if (spot) {
         spot.x = x
@@ -233,6 +258,13 @@ export function Traffic({ config = DEFAULT_CITY }: { config?: CityConfig }) {
       </instancedMesh>
       <instancedMesh ref={roofRef} args={[geometry, undefined, CAR_COUNT]} castShadow>
         <meshStandardMaterial vertexColors roughness={0.3} metalness={0.45} />
+      </instancedMesh>
+      <instancedMesh
+        ref={wheelRef}
+        args={[wheelGeometry, undefined, CAR_COUNT * 4]}
+        castShadow
+      >
+        <meshStandardMaterial color="#1c1f24" roughness={0.95} />
       </instancedMesh>
     </group>
   )
