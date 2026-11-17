@@ -27,9 +27,12 @@ const page = await browser.newPage()
 await page.setViewport({ width: 1280, height: 720 })
 page.on('console', (m) => {
   const t = m.text()
-  if (t.startsWith('[car]')) console.log('  КОНСОЛЬ:', t)
+  if (t.startsWith('[car]') && !t.includes('angVel:')) console.log('  КОНСОЛЬ:', t)
 })
-page.on('pageerror', (e) => console.log('  ОШИБКА СТРАНИЦЫ:', e.message.slice(0, 120)))
+page.on('pageerror', (e) => {
+  pageErrors++
+})
+let pageErrors = 0
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 })
 
 for (let i = 0; i < 60; i++) {
@@ -140,7 +143,8 @@ const after = await read()
 const yawDeg = (after.yawRate * 180) / Math.PI
 const alive = Number.isFinite(Number(after.rawY)) && Math.abs(yawDeg) > 20
 console.log(
-  `после: angvel.y=${after.rawY} цель=${after.target} скорость поворота=${yawDeg.toFixed(1)}°/с`,
+  `после: angvel.y=${after.rawY} цель=${after.target} скорость поворота=${yawDeg.toFixed(1)}°/с | ` +
+    `ошибок страницы: ${pageErrors}`,
 )
 console.log(alive ? '\n✓ руль восстановился сам' : '\n✗ руль не восстановился')
 
