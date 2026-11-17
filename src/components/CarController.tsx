@@ -436,6 +436,14 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         nearestDistance = distance
         nearest = i
       }
+      if (import.meta.env.DEV) {
+        const parked = carDebug.parked
+        if (parked.length <= i) parked.push({ x: t.x, z: t.z })
+        else {
+          parked[i].x = t.x
+          parked[i].z = t.z
+        }
+      }
     }
 
     if (pressedF && nearest >= 0) enterCar(nearest)
