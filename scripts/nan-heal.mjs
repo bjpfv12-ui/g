@@ -25,6 +25,11 @@ const browser = await puppeteer.launch({
 })
 const page = await browser.newPage()
 await page.setViewport({ width: 1280, height: 720 })
+page.on('console', (m) => {
+  const t = m.text()
+  if (t.startsWith('[car]')) console.log('  КОНСОЛЬ:', t)
+})
+page.on('pageerror', (e) => console.log('  ОШИБКА СТРАНИЦЫ:', e.message.slice(0, 120)))
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 })
 
 for (let i = 0; i < 60; i++) {
