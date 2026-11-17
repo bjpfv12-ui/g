@@ -4,7 +4,7 @@ import { create } from 'zustand'
  * CameraStore — орбитальный риг камеры.
  *
  * yaw/pitch читаются игроком каждый кадр (камера-относительное движение),
- * поэтому состояние меняется из CameraRig и не вызывает ре-рендеров.
+ * поэтому состояние меняется из CameraFollow и не вызывает ре-рендеров.
  */
 export interface CameraState {
   yaw: number

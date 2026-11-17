@@ -5,7 +5,7 @@ import { Sky, Environment } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
 import { CityGenerator } from './components/CityGenerator'
 import { PlayerController } from './components/PlayerController'
-import { CameraRig } from './components/CameraRig'
+import { CameraFollow } from './components/CameraFollow'
 import { Traffic } from './components/Traffic'
 import { Pedestrians } from './components/Pedestrians'
 import { Doors } from './components/Doors'
@@ -142,7 +142,7 @@ export default function App() {
           <Pedestrians config={DEFAULT_CITY} />
           <Doors config={DEFAULT_CITY} />
           <PlayerController spawn={spawn} />
-          <CameraRig />
+          <CameraFollow />
         </Physics>
 
         <PostFX />

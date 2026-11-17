@@ -15,14 +15,39 @@ const BASE_FOV = 66
 const SPRINT_FOV = 74
 /** Минимальная высота камеры над землёй, м. */
 const GROUND_CLEARANCE = 0.9
+/** Минимальное расстояние от камеры до игрока, м. */
+const MIN_DISTANCE = 1.4
+/** Отступ от препятствия, чтобы камера не липла к стене. */
+const WALL_MARGIN = 0.35
+/** Радиус проверки вокруг точки камеры, м. */
+const PROBE_RADIUS = 0.45
+/** Насколько резко камера догоняет игрока. */
+const FOLLOW_LAMBDA = 12
+/** Насколько резко камера доворачивает взгляд на игрока. */
+const LOOK_LAMBDA = 18
+
+/**
+ * Точки, в которых проверяем препятствия: центр и четыре смещения, чтобы
+ * камера не ныряла в углы стен.
+ */
+const PROBES: Array<[number, number]> = [
+  [0, 0],
+  [PROBE_RADIUS, 0],
+  [-PROBE_RADIUS, 0],
+  [0, PROBE_RADIUS],
+  [0, -PROBE_RADIUS],
+]
 
 const target = new THREE.Vector3()
 const desired = new THREE.Vector3()
 const offset = new THREE.Vector3()
 const direction = new THREE.Vector3()
 const right = new THREE.Vector3()
+const up = new THREE.Vector3()
+const probePoint = new THREE.Vector3()
+const probeDir = new THREE.Vector3()
 
-export function CameraRig() {
+export function CameraFollow() {
   const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera
   const { world, rapier } = useRapier()
   const lookTarget = useRef(new THREE.Vector3(0, 1.5, 0))
@@ -83,21 +108,40 @@ export function CameraRig() {
     const fullDistance = direction.length()
     if (fullDistance > 0.001) {
       direction.divideScalar(fullDistance)
-      const ray = new rapier.Ray(
-        { x: target.x, y: target.y, z: target.z },
-        { x: direction.x, y: direction.y, z: direction.z },
-      )
-      const hit = world.castRay(
-        ray,
-        fullDistance,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        playerState.body ?? undefined,
-      )
-      if (hit) {
-        const safe = Math.max(1.4, hit.timeOfImpact - 0.35)
+      // Перпендикуляр к направлению взгляда — для смещения проб.
+      up.copy(direction).cross(right).normalize()
+      if (!Number.isFinite(up.x)) up.set(0, 1, 0)
+
+      // Из нескольких лучей берём самый короткий свободный отрезок.
+      let allowed = 1
+      for (const [ox, oy] of PROBES) {
+        probePoint.copy(desired).addScaledVector(right, ox).addScaledVector(up, oy)
+        probeDir.copy(probePoint).sub(target)
+        const probeLength = probeDir.length()
+        if (probeLength < 0.001) continue
+        probeDir.divideScalar(probeLength)
+
+        const ray = new rapier.Ray(
+          { x: target.x, y: target.y, z: target.z },
+          { x: probeDir.x, y: probeDir.y, z: probeDir.z },
+        )
+        const hit = world.castRay(
+          ray,
+          probeLength,
+          true,
+          undefined,
+          undefined,
+          undefined,
+          playerState.body ?? undefined,
+        )
+        if (hit) {
+          const free = (hit.timeOfImpact * probeLength - WALL_MARGIN) / fullDistance
+          if (free < allowed) allowed = free
+        }
+      }
+
+      if (allowed < 1) {
+        const safe = Math.max(MIN_DISTANCE, allowed * fullDistance)
         desired.copy(target).addScaledVector(direction, safe)
       }
     }
@@ -106,9 +150,8 @@ export function CameraRig() {
     desired.y = Math.max(desired.y, GROUND_CLEARANCE)
 
     // ─── Сглаживание ─────────────────────────────────────────────────────────
-    const lambda = 12
-    camera.position.lerp(desired, 1 - Math.exp(-lambda * dt))
-    lookTarget.current.lerp(target, 1 - Math.exp(-18 * dt))
+    camera.position.lerp(desired, 1 - Math.exp(-FOLLOW_LAMBDA * dt))
+    lookTarget.current.lerp(target, 1 - Math.exp(-LOOK_LAMBDA * dt))
     camera.lookAt(lookTarget.current)
 
     // Лёгкое расширение поля зрения на бегу — ощущение скорости.
