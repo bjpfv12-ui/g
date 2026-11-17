@@ -123,7 +123,7 @@ async function steerTest(label, throttleMs, steerMs) {
   while (delta < -Math.PI) delta += Math.PI * 2
 
   const travel = Math.hypot(last.x - first.x, last.z - first.z)
-  const crashed = travel < 1 && last.speed < 3
+  const crashed = before.speed > 3 && travel < 1 && last.speed < 3
 
   console.log(`--- ${label} ---`)
   console.log(`скорость до: ${before.speed.toFixed(1)} м/с`)
@@ -132,10 +132,6 @@ async function steerTest(label, throttleMs, steerMs) {
       (mid.actual * 180) /
       Math.PI
     ).toFixed(1)}°/с | лимит: ${((mid.limit * 180) / Math.PI).toFixed(1)}°/с | полномочия: ${mid.authority.toFixed(2)}`,
-  )
-  console.log(
-    `трение шин: ${mid.friction} (правило ${mid.combine}), масса ${mid.mass.toFixed(0)}, ` +
-      `инерция ${mid.inertia.toFixed(2)}`,
   )
   console.log(
     `кузов: ${((delta * 180) / Math.PI).toFixed(1)}° за ${(steerMs / 1000).toFixed(1)} c, ` +
