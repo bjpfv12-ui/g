@@ -120,7 +120,7 @@ export const TUNING: Tuning = {
   carMaxReverseSpeed: 8,
   carEngineAccel: 9,
   carReverseAccel: 5,
-  carMaxYawRate: 5
+  carMaxYawRate: 5,
   carYawFalloff: 0,
   carSteerResponse: 15,
   carSteerFullSpeed: 550,
