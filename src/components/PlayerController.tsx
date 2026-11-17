@@ -15,18 +15,34 @@ const FOOT_OFFSET = HALF_HEIGHT + RADIUS
 const WALK_SPEED = 5.4
 /** Спринт ровно в 1.8 раза быстрее ходьбы. */
 const SPRINT_SPEED = WALK_SPEED * 1.8
+/** Задний ход заметно медленнее вперёд, как в GTA. */
+const BACK_SPEED_FACTOR = 0.55
 const JUMP_SPEED = 8.8
-const STEP_HOP_SPEED = 3.4
+/** Импульс вверх, чтобы перешагнуть бордюр. */
+const STEP_HOP_SPEED = 3.2
 const MAX_STEP_HEIGHT = 0.45
+/** Ниже этой высоты ступеньку игнорируем — иначе цепляем каждый шов. */
+const MIN_STEP_HEIGHT = 0.04
+/** Насколько далеко ищем ступеньку впереди, м. */
+const STEP_LOOK_AHEAD = 0.7
+/** Пауза между прыжками через бордюр, с. */
+const STEP_HOP_COOLDOWN = 0.45
+/** Сколько секунд земля считается «под ногами» после последнего касания. */
+const GROUND_STICKY = 0.1
 /** Сколько секунд после схода с земли ещё можно прыгнуть. */
 const COYOTE_TIME = 0.12
+
+/** Максимальная скорость поворота корпуса, рад/с. */
+const TURN_RATE = 6.5
+/** Сглаживание доворота корпуса к прицелу. */
+const TURN_RESPONSE = 12
+/** Скорость поворота (рад/с), при которой крен выходит на максимум. */
+const LEAN_FULL_RATE = 5
 
 /** Длина шага: на такой дистанции нога проходит полный цикл. */
 const STRIDE_LENGTH = 2.0
 /** Максимальный крен корпуса в повороте, радианы. */
 const MAX_LEAN = 0.22
-/** Скорость поворота (рад/с), при которой крен выходит на максимум. */
-const LEAN_RESPONSE = 0.06
 const LEAN_SMOOTHING = 9
 /** Наклон вперёд на спринте, радианы. */
 const SPRINT_PITCH = 0.2
@@ -67,6 +83,10 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
   const facing = useRef(0)
   const phase = useRef(0)
   const coyote = useRef(0)
+  /** Сколько ещё секунд земля считается «под ногами». */
+  const groundTimer = useRef(0)
+  /** Сколько ещё секунд нельзя прыгать через бордюр. */
+  const hopCooldown = useRef(0)
   /** Текущий крен корпуса, -1..1. */
   const leanAmount = useRef(0)
   /** Текущий наклон вперёд, радианы. */
