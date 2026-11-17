@@ -1,0 +1,251 @@
+:root {
+  --ink: #1b1512;
+  --ink-soft: rgba(27, 21, 18, 0.72);
+  --paper: #f7ece0;
+  --accent: #ffb066;
+  --accent-dim: rgba(255, 176, 102, 0.45);
+  --line: rgba(255, 226, 190, 0.16);
+  --font-ui: 'Unbounded', 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #17120f;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.app canvas {
+  display: block;
+  touch-action: none;
+}
+
+/* ─── HUD ─────────────────────────────────────────────────────────────────── */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hud__brand {
+  position: absolute;
+  top: 22px;
+  left: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+}
+
+.hud__title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: var(--paper);
+}
+
+.hud__subtitle {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.hud__telemetry {
+  position: absolute;
+  top: 22px;
+  right: 26px;
+  display: flex;
+  gap: 18px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--ink-soft);
+  backdrop-filter: blur(8px);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.hud__key {
+  display: inline-block;
+  min-width: 16px;
+  margin-right: 7px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.hud__controls {
+  position: absolute;
+  left: 26px;
+  bottom: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  max-width: 60vw;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(247, 236, 224, 0.68);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.hud__controls b {
+  color: var(--paper);
+  font-weight: 700;
+}
+
+/* ─── Мини-карта ──────────────────────────────────────────────────────────── */
+
+.hud__map {
+  position: absolute;
+  right: 26px;
+  bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.minimap {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #15181d;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+
+.hud__mapLegend {
+  display: flex;
+  gap: 14px;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(247, 236, 224, 0.5);
+}
+
+.hud__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.hud__dot--player {
+  background: #ffd79a;
+}
+
+.hud__dot--traffic {
+  background: #ffb066;
+}
+
+.hud__dot--ped {
+  background: #7fd0c4;
+}
+
+/* ─── Подсказка взаимодействия ───────────────────────────────────────────── */
+
+.hud__prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 118px;
+  transform: translateX(-50%);
+  padding: 9px 18px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  background: rgba(24, 18, 15, 0.86);
+  backdrop-filter: blur(8px);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+
+/* ─── Оверлей паузы ───────────────────────────────────────────────────────── */
+
+.hud__overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(
+    circle at 50% 45%,
+    rgba(20, 15, 12, 0.35),
+    rgba(14, 10, 8, 0.82)
+  );
+}
+
+.hud__overlayCard {
+  width: min(440px, 86vw);
+  padding: 34px 36px 30px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(24, 18, 15, 0.88);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  text-align: left;
+}
+
+.hud__overlayCard h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.hud__overlayCard p {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(247, 236, 224, 0.72);
+}
+
+.hud__overlayCard ul {
+  margin: 0 0 22px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.9;
+  color: rgba(247, 236, 224, 0.58);
+}
+
+.hud__cta {
+  display: inline-block;
+  padding: 9px 16px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  background: rgba(255, 176, 102, 0.1);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
