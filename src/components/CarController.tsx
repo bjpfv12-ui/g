@@ -20,6 +20,16 @@ const EXIT_OFFSET = 0.75
  * при отскоке от бордюра она дребезжит, и руль дёргается вместо поворота.
  */
 const GEAR_SPEED = 2.5
+/**
+ * Сколько секунд машина должна ехать назад, чтобы переключилась передача, с.
+ * Короткий отскок (разворот на месте, отскок от бордюра) передачу не меняет.
+ */
+const GEAR_SWITCH_DELAY = 0.5
+/**
+ * Сколько секунд руль может молчать, прежде чем курс доводится кодом, с.
+ * Нужно, когда контакт (бордюр, стена) гасит момент и руль «умирает».
+ */
+const STUCK_UNSTICK_DELAY = 0.25
 
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -27,6 +37,8 @@ const UP = new THREE.Vector3(0, 1, 0)
 const carQuaternion = new THREE.Quaternion()
 const carForward = new THREE.Vector3()
 const carSide = new THREE.Vector3()
+const carTurnQuat = new THREE.Quaternion()
+const carBodyQuat = new THREE.Quaternion()
 
 /** Припаркованная машина с идентификатором — по нему её находит игрок. */
 interface Car extends ParkedCarDef {
@@ -51,6 +63,8 @@ const carDebug = {
     direction: 1,
     /** Крутящий момент, который прикладывается к кузову, Н·м. */
     turnForce: 0,
+    /** Сколько раз курс пришлось доводить кодом — руль не смог провернуть кузов. */
+    unstuck: 0,
   },
   /** Сырая угловая скорость тела из Rapier — для проверки, что вращение не сбрасывается. */
   angvel: { x: 0, y: 0, z: 0 },
@@ -220,6 +234,10 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   const bodies = useRef<(RapierRigidBody | null)[]>([])
   /** Направление руля: 1 — вперёд, -1 — назад. Меняется с запасом по скорости. */
   const steerDirection = useRef(1)
+  /** Сколько секунд машина едет назад подряд — для переключения передачи. */
+  const reverseTimer = useRef(0)
+  /** Сколько секунд руль не может провернуть кузов (мешает контакт). */
+  const stuckTimer = useRef(0)
   /** До какого момента (мс) печатаем angVel в консоль — 1 с после нажатия A/D. */
   const steerLogUntil = useRef(0)
   /** Предыдущее положение руля — чтобы поймать новое нажатие. */
@@ -525,16 +543,6 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
               `полномочия ${authority.toFixed(2)}`,
           )
         }
-      }
-
-      // ─── Тормоз ───────────────────────────────────────────────────────────
-      if (braking) {
-        const speed = Math.hypot(velocity.x, velocity.z)
-        if (speed > 0.02) {
-          const factor = Math.max(0, 1 - TUNING.carBrake * dt)
-          body.setLinvel({ x: velocity.x * factor, y: velocity.y, z: velocity.z * factor }, true)
-        }
-        body.setAngvel({ x: 0, y: angular.y * Math.max(0, 1 - TUNING.carBrake * dt), z: 0 }, true)
       }
 
       // ─── Ограничение максимальной скорости ──────────────────────────────
