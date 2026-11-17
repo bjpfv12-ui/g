@@ -42,6 +42,8 @@ const carDebug = {
     limit: 0,
     authority: 0,
   },
+  /** Сырая угловая скорость тела из Rapier — для проверки, что вращение не сбрасывается. */
+  angvel: { x: 0, y: 0, z: 0 },
 }
 
 if (import.meta.env.DEV) {
