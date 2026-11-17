@@ -337,10 +337,26 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         )
       }
 
-      // ─── Сцепление: гасим боковое скольжение ─────────────────────────────
-      if (Math.abs(sideSpeed) > 0.01) {
-        const impulse = -sideSpeed * mass * TUNING.carGrip * dt
-        body.applyImpulse({ x: side.x * impulse, y: 0, z: side.z * impulse }, true)
+      // ─── Сцепление: скорость доворачивается за кузовом ─────────────────────
+      // Важно: величина скорости при этом сохраняется. Раньше боковое
+      // скольжение просто гасилось импульсом, и при резком повороте (кузов
+      // успевает провернуться быстрее, чем траектория) весь ход съедался —
+      // машина тормозила до нуля прямо в повороте и дальше крутилась волчком.
+      // Теперь импульс поворачивает вектор скорости к курсу кузова, а её
+      // модуль почти не меняется.
+      const speedNow = Math.hypot(velocity.x, velocity.z)
+      if (speedNow > 0.05) {
+        const follow = 1 - Math.exp(-TUNING.carGrip * dt)
+        // Угол скольжения: насколько скорость отстаёт от курса кузова.
+        const slip = Math.abs(Math.asin(THREE.MathUtils.clamp(sideSpeed / speedNow, -1, 1)))
+        // В заносе машина всё же слегка теряет ход.
+        const drag = Math.max(0, 1 - TUNING.carTurnDrag * slip * dt)
+        const wantX = forward.x * speedNow * drag
+        const wantZ = forward.z * speedNow * drag
+        body.applyImpulse(
+          { x: (wantX - velocity.x) * mass, y: 0, z: (wantZ - velocity.z) * mass },
+          true,
+        )
       }
 
       // ─── Руль ─────────────────────────────────────────────────────────────
