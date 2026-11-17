@@ -196,13 +196,16 @@ export function CameraFollow() {
           { x: target.x, y: target.y, z: target.z },
           { x: probeDir.x, y: probeDir.y, z: probeDir.z },
         )
+        // За рулём луч стартует внутри кузова: его коллайдер надо исключить,
+        // иначе камера прижимается к машине вплотную и не видно дороги.
+        const carCollider = playerState.carBody?.collider(0)
         const hit = world.castRay(
           ray,
           probeLength,
           true,
           undefined,
           undefined,
-          undefined,
+          carCollider ?? undefined,
           playerState.body ?? undefined,
         )
         if (hit) {
