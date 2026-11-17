@@ -26,6 +26,15 @@ const browser = await puppeteer.launch({
 })
 const page = await browser.newPage()
 await page.setViewport({ width: 1280, height: 720 })
+
+// Просадка CPU — эмулируем слабую машину (низкий FPS).
+const CPU = Number(process.env.CPU ?? 0)
+if (CPU > 1) {
+  const client = await page.createCDPSession()
+  await client.send('Emulation.setCPUThrottlingRate', { rate: CPU })
+  console.log(`просадка CPU x${CPU}`)
+}
+
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 })
 await new Promise((r) => setTimeout(r, 5000))
 
