@@ -35,14 +35,37 @@ await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 })
 await page.addStyleTag({ content: '.hud__overlay{display:none !important}' })
 await new Promise((r) => setTimeout(r, 4000))
 
-// Доворачиваем персонажа клавишей D — видно, что камера встаёт за спину.
-await page.keyboard.down('KeyW')
-await new Promise((r) => setTimeout(r, 700))
-await page.keyboard.down('KeyD')
-await new Promise((r) => setTimeout(r, 900))
-await page.screenshot({ path: OUT })
-await page.keyboard.up('KeyD')
-await page.keyboard.up('KeyW')
+if (process.env.CAR === '1') {
+  // Садимся в машину и снимаем поворот — нужен dev-сервер с хуками.
+  const parked = await page.evaluate(() => window.__carState?.parked ?? [])
+  if (parked.length > 0) {
+    await page.evaluate((target) => {
+      window.__playerState.body.setTranslation(
+        { x: target.x + 1.2, y: 1.2, z: target.z },
+        true,
+      )
+    }, parked[0])
+    await new Promise((r) => setTimeout(r, 800))
+    await page.keyboard.press('KeyF')
+    await new Promise((r) => setTimeout(r, 600))
+  }
+  await page.keyboard.down('KeyW')
+  await new Promise((r) => setTimeout(r, 2200))
+  await page.keyboard.down('KeyA')
+  await new Promise((r) => setTimeout(r, 900))
+  await page.screenshot({ path: OUT })
+  await page.keyboard.up('KeyA')
+  await page.keyboard.up('KeyW')
+} else {
+  // Доворачиваем персонажа клавишей D — видно, что камера встаёт за спину.
+  await page.keyboard.down('KeyW')
+  await new Promise((r) => setTimeout(r, 700))
+  await page.keyboard.down('KeyD')
+  await new Promise((r) => setTimeout(r, 900))
+  await page.screenshot({ path: OUT })
+  await page.keyboard.up('KeyD')
+  await page.keyboard.up('KeyW')
+}
 
 const telemetry = await page.evaluate(() => {
   const el = document.querySelector('.hud__telemetry')
