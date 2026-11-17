@@ -192,13 +192,13 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
     }
 
     // ─── Перешагивание бордюров ───────────────────────────────────────────────
-    const currentSpeed = Math.hypot(velocity.x, velocity.z)
-    if (
-      grounded &&
-      coyote.current > 0 &&
-      inputLength > 0 &&
-      currentSpeed < speed * 0.45
-    ) {
+    // Ступеньку ищем лучом заранее, до столкновения: персонаж наезжает на
+    // бордюр без остановки. Раньше прыжок срабатывал уже после торможения, и
+    // ход рвался на каждом бордюре.
+    if (hopCooldown.current > 0) {
+      hopCooldown.current = Math.max(0, hopCooldown.current - dt)
+    }
+    if (grounded && moveInput && hopCooldown.current <= 0) {
       const feetY = position.y - FOOT_OFFSET
       const stepRay = new rapier.Ray(
         { x: position.x, y: feetY + 0.12, z: position.z },
@@ -206,7 +206,7 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
       )
       const stepHit = world.castRay(
         stepRay,
-        0.85,
+        STEP_LOOK_AHEAD,
         true,
         undefined,
         undefined,
@@ -219,20 +219,18 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
         }
         if (shape.halfExtents) {
           const top = stepHit.collider.translation().y + shape.halfExtents.y
-          if (top - feetY <= MAX_STEP_HEIGHT) {
+          const rise = top - feetY
+          // Запрыгиваем только на настоящую ступеньку: не на шов и не на стену.
+          if (rise > MIN_STEP_HEIGHT && rise <= MAX_STEP_HEIGHT) {
             rb.setLinvel({ x: vx, y: STEP_HOP_SPEED, z: vz }, true)
+            hopCooldown.current = STEP_HOP_COOLDOWN
+            grounded = false
           }
         }
       }
     }
 
     // ─── Поворот персонажа ────────────────────────────────────────────────────
-    let turnDelta = 0
-    if (inputLength > 0) {
-      const targetFacing = Math.atan2(-dirX, -dirZ)
-      turnDelta = angleDiff(targetFacing, facing.current)
-      facing.current = lerpAngle(facing.current, targetFacing, 1 - Math.exp(-16 * dt))
-    }
     playerState.facing = facing.current
 
     const horizontalSpeed = Math.hypot(vx, vz)
@@ -241,12 +239,11 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
     playerState.position.set(position.x, position.y, position.z)
 
     // ─── Крен в повороте ──────────────────────────────────────────────────────
-    // Поворот тем быстрее, чем больше угол остался довернуть; крен пропорционален
-    // скорости поворота. В воздухе корпус держим ровно.
-    const appliedTurn = turnDelta * (1 - Math.exp(-16 * dt))
-    const turnSpeed = dt > 0 ? appliedTurn / dt : 0
+    // Крен пропорционален скорости поворота корпуса. На бегу он заметнее,
+    // стоя — едва заметен.
+    const turnSpeed = dt > 0 ? turnStep / dt : 0
     const leanTarget = grounded
-      ? THREE.MathUtils.clamp(turnSpeed * LEAN_RESPONSE, -1, 1)
+      ? THREE.MathUtils.clamp(turnSpeed / LEAN_FULL_RATE, -1, 1) * (moveInput ? 1 : 0.45)
       : 0
     leanAmount.current = THREE.MathUtils.damp(
       leanAmount.current,
