@@ -107,6 +107,24 @@ const duringTurn = await page.evaluate(() => ({
 }))
 await page.keyboard.up('KeyD')
 
+// ─── 3. Поворот на бегу: W + D, дуга вместо остановки ──────────────────────
+await page.keyboard.down('KeyW')
+await new Promise((r) => setTimeout(r, 600))
+const arcStart = await page.evaluate(() => ({
+  x: window.__playerState.position.x,
+  z: window.__playerState.position.z,
+  facing: window.__playerState.facing,
+}))
+await page.keyboard.down('KeyD')
+const arc = await collect(2000)
+await page.keyboard.up('KeyD')
+await page.keyboard.up('KeyW')
+const arcEnd = await page.evaluate(() => ({
+  x: window.__playerState.position.x,
+  z: window.__playerState.position.z,
+  facing: window.__playerState.facing,
+}))
+
 console.log('=== ХОД (4 c, W) ===')
 const speeds = walk.map((s) => s.speed)
 const steady = speeds.slice(Math.floor(speeds.length * 0.4))
@@ -133,5 +151,15 @@ console.log('=== ПОВОРОТ (D, 1.5 c) ===')
 console.log('курс корпуса: до', beforeTurn.facing.toFixed(3), '→ после', duringTurn.facing.toFixed(3))
 console.log('yaw камеры  : до', beforeTurn.yaw.toFixed(3), '→ после', duringTurn.yaw.toFixed(3))
 console.log('скорость на повороте:', duringTurn.speed.toFixed(2), 'м/с')
+
+console.log('=== ДУГА НА БЕГУ (W + D, 2 c) ===')
+const arcSpeeds = arc.map((s) => s.speed)
+const arcSteady = arcSpeeds.slice(Math.floor(arcSpeeds.length * 0.35))
+console.log('скорость в дуге:', stats(arcSteady))
+const chord = Math.hypot(arcEnd.x - arcStart.x, arcEnd.z - arcStart.z)
+console.log('смещение, м:', chord.toFixed(2), '| курс:', arcStart.facing.toFixed(2), '→', arcEnd.facing.toFixed(2))
+let arcStall = 0
+for (const s of arc) if (s.speed < 1) arcStall += s.t / 1000
+console.log('времени со скоростью < 1 м/с:', arcStall.toFixed(2), 'с')
 
 await browser.close()
