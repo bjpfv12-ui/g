@@ -41,6 +41,32 @@ VITE_BASE=/g/ npm run build   # PowerShell: $env:VITE_BASE='/g/'
 npx vite preview
 ```
 
+## Автокоммит
+
+Каждая серия правок сама превращается в коммит и уезжает в `main` (а значит,
+передеплоивается на Pages). Сторож — `scripts/autocommit.mjs`:
+
+| Что | Как |
+|---|---|
+| Срабатывание | 10 секунд тишины в рабочей папке, затем коммит |
+| Состав коммита | все незакоммиченные изменения (`git add -A`) |
+| Сообщение | `авто: <область> — <файлы>`, область выводится по путям (`компоненты`, `мир`, `код`, `деплой`) |
+| Push | в `origin/main`; при конфликте — `pull --rebase` и повтор |
+| Защита | пропускает цикл во время merge/rebase и при блокировке индекса |
+| Лог | `.git/autocommit.log`, PID — `.git/autocommit.pid` |
+
+Сторож запускается задачей Windows `SunsetDistrictAutoCommit` при входе в систему.
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts\install-autocommit.ps1   # поставить и запустить
+powershell -ExecutionPolicy Bypass -File scripts\stop-autocommit.ps1     # остановить
+node scripts/autocommit.mjs --once                                       # один прогон вручную
+node scripts/autocommit.mjs                                               # работать в текущем окне
+```
+
+Переменные окружения: `AUTOCOMMIT_QUIET_MS` (тихий период, мс),
+`AUTOCOMMIT_PUSH=0` — только коммиты, без push.
+
 ## Управление
 
 | Действие | Клавиши |
