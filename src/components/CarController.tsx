@@ -84,6 +84,8 @@ const carDebug = {
     angvel: number
   }[],
   traceOn: false,
+  /** Тест-крючок: подставить нулевой dt в один кадр (проверка на NaN). */
+  forceZeroDt: false,
 }
 
 if (import.meta.env.DEV) {
@@ -622,7 +624,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   )
 
   useFrame((_, delta) => {
-    const dt = Math.min(delta, 1 / 30)
+    const dt = carDebug.forceZeroDt ? 0 : Math.min(delta, 1 / 30)
     const input = useInputStore.getState()
     const pressedF = input.consumePress('KeyF')
 
