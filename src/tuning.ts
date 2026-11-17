@@ -74,14 +74,17 @@ export interface Tuning {
   carReverseAccel: number
   /** Предел скорости поворота кузова на месте, рад/с. */
   carMaxYawRate: number
-  /** Насколько падает разрешённый угол поворота с ростом скорости. */
-  carYawFalloff: number
   /** Насколько быстро кузов доворачивается до целевой скорости поворота, 1/с. */
   carSteerResponse: number
-  /** Скорость, на которой руль выходит на полные полномочия, м/с. */
-  carSteerFullSpeed: number
-  /** Минимальные полномочия руля на месте. */
+  /** Скорость, на которой полномочия руля падают до минимума, м/с. */
+  carSteerFalloffSpeed: number
+  /** Минимальные полномочия руля на большой скорости. */
   carMinSteerAuthority: number
+  /**
+   * Гашение остаточного вращения кузова за кадр (на 60 к/с).
+   * Меньше 1 — кузов не крутится волчком и не заваливается на бок.
+   */
+  carYawDamping: number
   /** Скорость гашения бокового скольжения, 1/с. Меньше — больше занос. */
   carGrip: number
   /** Потеря хода в заносе, 1/с. 0 — скорость в повороте не падает вовсе. */
@@ -123,10 +126,10 @@ export const TUNING: Tuning = {
   carEngineAccel: 9,
   carReverseAccel: 5,
   carMaxYawRate: 5,
-  carYawFalloff: 0,
   carSteerResponse: 15,
-  carSteerFullSpeed: 550,
+  carSteerFalloffSpeed: 30,
   carMinSteerAuthority: 0.45,
+  carYawDamping: 0.9,
   carGrip: 3,
   carTurnDrag: 0.3,
   carBrake: 6,
