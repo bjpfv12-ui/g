@@ -137,6 +137,27 @@ console.log(
     `(ждём < 5°/с)`,
 )
 
+// 5. Главный сценарий бага: руль держим 10 с — поворот обязан жить всё время.
+// Раньше машина поворачивала ровно 2 секунды, потом руль мёрт.
+const long = await record(['KeyW', 'KeyA'], 10000)
+const seconds = long.length ? (long[long.length - 1].t - long[0].t) / 1000 : 0
+// Проверяем по окнам: в каждой секунде поворот должен продолжаться.
+const perSecond = []
+for (let s = 0; s < Math.floor(seconds); s++) {
+  const from = long[0].t + s * 1000
+  const to = from + 1000
+  const win = long.filter((r) => r.t >= from && r.t < to)
+  const avg = win.reduce((acc, r) => acc + Math.abs(r.angvel), 0) / Math.max(1, win.length)
+  perSecond.push(deg(avg))
+}
+const deadSeconds = perSecond.filter((v) => v < 20).length
+const longOk = deadSeconds === 0 && perSecond.length >= 8
+results.push({ label: '5. Удержание руля 10 с: поворот не умирает', ok: longOk })
+console.log(
+  `${longOk ? '✓' : '✗'} 5. Удержание руля 10 с: скорость поворота по секундам — ` +
+    `${perSecond.map((v) => v.toFixed(0)).join(', ')}°/с | «мёртвых» секунд: ${deadSeconds}`,
+)
+
 const failed = results.filter((r) => !r.ok)
 console.log(`\nИТОГ: ${results.length - failed.length}/${results.length} проверок пройдено`)
 await browser.close()
