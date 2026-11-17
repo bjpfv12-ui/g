@@ -64,7 +64,11 @@ if (process.env.CAR === '1') {
   await new Promise((r) => setTimeout(r, 700))
   await page.keyboard.up('KeyA')
   await page.keyboard.up('KeyW')
-  await new Promise((r) => setTimeout(r, 400))
+  // Тормоз, чтобы машина точно стояла в кадре.
+  await page.keyboard.down('Space')
+  await new Promise((r) => setTimeout(r, 1200))
+  await page.keyboard.up('Space')
+  await new Promise((r) => setTimeout(r, 300))
 
   const camInfo = await page.evaluate(() => {
     const p = window.__playerState
