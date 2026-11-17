@@ -1,6 +1,6 @@
 /**
  * car.mjs — замер управляемости машины: разгон, скорость поворота кузова
- * на разных скоростях, время до поворота на 90°.
+ * на разных скоростях, потеря скорости в повороте.
  *
  * Нужен dev-сервер (доступны хуки __playerState и __carState):
  *   npm run dev
@@ -37,13 +37,37 @@ const carState = () =>
   page.evaluate(() => ({
     isDriving: window.__carState.isDriving,
     speed: window.__carState.speed,
-    throttle: window.__carState.throttle,
     yaw: window.__playerState.carYaw,
     yawRate: window.__playerState.carYawRate,
     forwardSpeed: window.__playerState.carForwardSpeed,
   }))
 
-// ─── 1. Ищем припаркованную машину и садимся ───────────────────────────────
+/** Снимает телеметрию каждый кадр, пока идёт сбор. */
+const sample = (ms) =>
+  page.evaluate(
+    (duration) =>
+      new Promise((resolve) => {
+        const rows = []
+        const start = performance.now()
+        const tick = () => {
+          const p = window.__playerState
+          rows.push({
+            t: performance.now() - start,
+            x: p.position.x,
+            z: p.position.z,
+            yaw: p.carYaw,
+            yawRate: p.carYawRate,
+            speed: window.__carState.speed,
+          })
+          if (performance.now() - start < duration) requestAnimationFrame(tick)
+          else resolve(rows)
+        }
+        requestAnimationFrame(tick)
+      }),
+    ms,
+  )
+
+// ─── 1. Садимся в машину ───────────────────────────────────────────────────
 const parked = await page.evaluate(() => window.__carState.parked ?? [])
 if (parked.length === 0) {
   console.log('нет данных о припаркованных машинах')
@@ -51,28 +75,24 @@ if (parked.length === 0) {
   process.exit(1)
 }
 
-// Ставим игрока вплотную к первой машине и садимся.
-await page.evaluate((target) => {
-  const body = window.__playerState.body
-  body.setTranslation({ x: target.x + 1.2, y: 1.2, z: target.z }, true)
-}, parked[0])
-await new Promise((r) => setTimeout(r, 900))
-await page.keyboard.press('KeyF')
-await new Promise((r) => setTimeout(r, 700))
-
-let seated = (await carState()).isDriving
-if (!seated) {
-  // Подходим ближе — иногда проём один и тот же, но с другой стороны.
-  await page.evaluate((target) => {
-    const body = window.__playerState.body
-    body.setTranslation({ x: target.x - 1.2, y: 1.2, z: target.z }, true)
-  }, parked[0])
-  await new Promise((r) => setTimeout(r, 900))
+let seated = false
+for (const offset of [1.2, -1.2, 0, 2.2]) {
+  await page.evaluate(
+    (target, dx) => {
+      window.__playerState.body.setTranslation(
+        { x: target.x + dx, y: 1.2, z: target.z },
+        true,
+      )
+    },
+    parked[0],
+    offset,
+  )
+  await new Promise((r) => setTimeout(r, 800))
   await page.keyboard.press('KeyF')
-  await new Promise((r) => setTimeout(r, 700))
+  await new Promise((r) => setTimeout(r, 600))
   seated = (await carState()).isDriving
+  if (seated) break
 }
-
 if (!seated) {
   console.log('не удалось сесть в машину; промпт:', await prompt())
   await browser.close()
@@ -80,33 +100,42 @@ if (!seated) {
 }
 console.log('сели в машину ✓')
 
-// ─── 2. Разгон ─────────────────────────────────────────────────────────────
-await page.keyboard.down('KeyW')
-await new Promise((r) => setTimeout(r, 4000))
-const cruising = await carState()
-console.log(
-  `разгон: скорость ${cruising.speed.toFixed(1)} м/с, курс ${cruising.yaw.toFixed(2)}`,
-)
+/** Доворот на полном руле: жмём A и смотрим, что делает кузов. */
+async function steerTest(label, throttleMs, steerMs) {
+  if (throttleMs > 0) await page.keyboard.down('KeyW')
+  await new Promise((r) => setTimeout(r, throttleMs))
+  const before = await carState()
+  await page.keyboard.down('KeyA')
+  const rows = await sample(steerMs)
+  await page.keyboard.up('KeyA')
+  if (throttleMs > 0) await page.keyboard.up('KeyW')
+  await new Promise((r) => setTimeout(r, 400))
 
-// ─── 3. Поворот на скорости ─────────────────────────────────────────────────
-const before = await carState()
-await page.keyboard.down('KeyA')
-await new Promise((r) => setTimeout(r, 2000))
-const after = await carState()
-await page.keyboard.up('KeyA')
-await page.keyboard.up('KeyW')
+  const first = rows[0]
+  const last = rows[rows.length - 1]
+  const mid = rows[Math.floor(rows.length / 2)]
+  let delta = last.yaw - first.yaw
+  while (delta > Math.PI) delta -= Math.PI * 2
+  while (delta < -Math.PI) delta += Math.PI * 2
 
-let delta = after.yaw - before.yaw
-while (delta > Math.PI) delta -= Math.PI * 2
-while (delta < -Math.PI) delta += Math.PI * 2
+  const travel = Math.hypot(last.x - first.x, last.z - first.z)
+  const crashed = travel < 1 && last.speed < 3
 
-const turned = Math.abs(delta)
-const seconds = 2
-console.log('=== РУЛЬ НА ХОДУ ===')
-console.log(`скорость: ${after.speed.toFixed(1)} м/с (${(after.speed * 3.6).toFixed(0)} км/ч)`)
-console.log(`кузов повернулся на ${((turned * 180) / Math.PI).toFixed(1)}° за ${seconds} c`)
-console.log(`скорость поворота кузова: ${((turned / seconds) * 180 / Math.PI).toFixed(1)}°/с`)
-console.log(`время на поворот 90°: ${((Math.PI / 2) / Math.max(turned / seconds, 1e-6)).toFixed(1)} c`)
-console.log(`скорость после поворота: ${after.speed.toFixed(1)} м/с`)
+  console.log(`--- ${label} ---`)
+  console.log(`скорость до: ${before.speed.toFixed(1)} м/с`)
+  console.log(
+    `кузов: ${((delta * 180) / Math.PI).toFixed(1)}° за ${(steerMs / 1000).toFixed(1)} c, ` +
+      `в середине ${((mid.yawRate * 180) / Math.PI).toFixed(1)}°/с`,
+  )
+  console.log(
+    `скорость после: ${last.speed.toFixed(1)} м/с, пройдено ${travel.toFixed(1)} м`,
+  )
+  if (crashed) console.log('ВЫВОД: машина врезалась — замер недействителен')
+  return { crashed }
+}
+
+await steerTest('руль на месте', 0, 1200)
+await steerTest('руль на малой скорости', 700, 1200)
+await steerTest('руль на ходу', 2200, 1200)
 
 await browser.close()
