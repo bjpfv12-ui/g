@@ -391,6 +391,9 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         carDebug.steer.actual = angular.y
         carDebug.steer.limit = yawLimit
         carDebug.steer.authority = speedFactor
+        carDebug.angvel.x = angular.x
+        carDebug.angvel.y = angular.y
+        carDebug.angvel.z = angular.z
       }
 
       // ─── Тормоз ───────────────────────────────────────────────────────────
