@@ -74,6 +74,21 @@ const stats = (values) => {
 }
 
 // ─── 1. Разгон и ровный ход ────────────────────────────────────────────────
+const fps = await page.evaluate(
+  () =>
+    new Promise((resolve) => {
+      let frames = 0
+      const start = performance.now()
+      const tick = () => {
+        frames++
+        if (performance.now() - start < 2000) requestAnimationFrame(tick)
+        else resolve(Math.round((frames * 1000) / (performance.now() - start)))
+      }
+      requestAnimationFrame(tick)
+    }),
+)
+console.log('fps:', fps, USE_GPU ? '(реальный GPU)' : '(SwiftShader)')
+
 await page.keyboard.down('KeyW')
 const walk = await collect(4000)
 await page.keyboard.up('KeyW')
@@ -81,13 +96,13 @@ await page.keyboard.up('KeyW')
 // ─── 2. Поворот клавишей D ─────────────────────────────────────────────────
 const beforeTurn = await page.evaluate(() => ({
   facing: window.__playerState.facing,
-  yaw: window.__cameraStore.yaw,
+  yaw: window.__cameraStore.getState().yaw,
 }))
 await page.keyboard.down('KeyD')
 await new Promise((r) => setTimeout(r, 1500))
 const duringTurn = await page.evaluate(() => ({
   facing: window.__playerState.facing,
-  yaw: window.__cameraStore.yaw,
+  yaw: window.__cameraStore.getState().yaw,
   speed: window.__playerState.speed,
 }))
 await page.keyboard.up('KeyD')
