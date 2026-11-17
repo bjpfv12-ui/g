@@ -44,6 +44,9 @@ const carDebug = {
   },
   /** Сырая угловая скорость тела из Rapier — для проверки, что вращение не сбрасывается. */
   angvel: { x: 0, y: 0, z: 0 },
+  /** Тело и габариты текущей машины — для автотестов и замеров. */
+  body: null as RapierRigidBody | null,
+  dims: { width: 0, length: 0, height: 0 },
 }
 
 if (import.meta.env.DEV) {
@@ -428,6 +431,10 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
 
       carDebug.speed = playerState.speed
       carDebug.throttle = throttle
+      carDebug.body = body
+      carDebug.dims.width = def.width
+      carDebug.dims.length = def.length
+      carDebug.dims.height = def.height
     },
     [cars],
   )
