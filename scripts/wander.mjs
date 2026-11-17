@@ -36,7 +36,16 @@ if (CPU > 1) {
 }
 
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 })
-await new Promise((r) => setTimeout(r, 5000))
+
+// Ждём, пока мир и физика прогрузятся (при просадке CPU это долго).
+for (let i = 0; i < 60; i++) {
+  const ready = await page.evaluate(
+    () => (window.__carState?.parked?.length ?? 0) > 0 && !!window.__playerState?.body,
+  )
+  if (ready) break
+  await new Promise((r) => setTimeout(r, 1000))
+}
+await new Promise((r) => setTimeout(r, 2000))
 
 const parked = await page.evaluate(() => window.__carState.parked ?? [])
 const target = await page.evaluate((list) => {
