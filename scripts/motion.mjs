@@ -12,6 +12,8 @@ import puppeteer from 'puppeteer-core'
 
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const URL = process.env.APP_URL ?? 'http://127.0.0.1:5178/'
+/** GPU=1 — не включать SwiftShader, чтобы мерить на реальной видеокарте. */
+const USE_GPU = process.env.GPU === '1'
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -19,9 +21,9 @@ const browser = await puppeteer.launch({
   args: [
     '--no-sandbox',
     '--disable-dev-shm-usage',
-    '--use-gl=angle',
-    '--use-angle=swiftshader',
-    '--enable-unsafe-swiftshader',
+    ...(USE_GPU
+      ? ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader']
+      : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']),
     '--window-size=1280,720',
   ],
 })
