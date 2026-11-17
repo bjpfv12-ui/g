@@ -8,6 +8,7 @@ import { useInputStore } from '../store/InputStore'
 import { useCarStore } from '../store/CarStore'
 import { useUiStore } from '../store/UiStore'
 import { playerState } from '../state/playerState'
+import { TUNING } from '../tuning'
 
 /** Радиус, в котором игрок может сесть в машину, м. */
 const INTERACT_RADIUS = 3
@@ -229,7 +230,9 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // Шины «без трения»: сцепление с асфальтом держит только код (импульс
       // GRIP). Плоское днище кузова иначе упирается в асфальт, и руль
       // физически не может провернуть машину — она словно на рельсах.
-      body.collider(0)?.setFrictionCombineRule(CoefficientCombineRule.Min)
+      if (TUNING.carFrictionlessTires) {
+        body.collider(0)?.setFrictionCombineRule(CoefficientCombineRule.Min)
+      }
 
       // Камера не должна цеплять коллайдер машины — иначе она прижимается
       // к кузову и не видно, куда едешь.
@@ -321,11 +324,11 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // часть усилия. Боковой компонент скорости трогать нельзя — его гасит
       // сцепление ниже, иначе машину будет разворачивать на месте.
       if (throttle !== 0 && !braking) {
-        const accel = throttle > 0 ? ENGINE_ACCEL : REVERSE_ACCEL
+        const accel = throttle > 0 ? TUNING.carEngineAccel : TUNING.carReverseAccel
         const desired = THREE.MathUtils.clamp(
           forwardSpeed + throttle * accel * dt,
-          -MAX_REVERSE_SPEED,
-          MAX_SPEED,
+          -TUNING.carMaxReverseSpeed,
+          TUNING.carMaxSpeed,
         )
         const impulse = (desired - forwardSpeed) * mass
         body.applyImpulse(
@@ -336,7 +339,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
 
       // ─── Сцепление: гасим боковое скольжение ─────────────────────────────
       if (Math.abs(sideSpeed) > 0.01) {
-        const impulse = -sideSpeed * mass * GRIP * dt
+        const impulse = -sideSpeed * mass * TUNING.carGrip * dt
         body.applyImpulse({ x: side.x * impulse, y: 0, z: side.z * impulse }, true)
       }
 
@@ -345,18 +348,18 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // Так руль сам возвращается в «прямо», а на большой скорости угол
       // ограничивается — как в настоящей машине.
       const speedFactor = THREE.MathUtils.clamp(
-        Math.abs(forwardSpeed) / STEER_FULL_SPEED,
-        MIN_STEER_AUTHORITY,
+        Math.abs(forwardSpeed) / TUNING.carSteerFullSpeed,
+        TUNING.carMinSteerAuthority,
         1,
       )
       const yawLimit =
-        MAX_YAW_RATE / (1 + Math.abs(forwardSpeed) / YAW_SPEED_FALLOFF)
+        TUNING.carMaxYawRate / (1 + Math.abs(forwardSpeed) / TUNING.carYawFalloff)
       // На заднем ходу руль работает наоборот.
       const direction = forwardSpeed < 0 ? -1 : 1
       const targetYawRate = steer * direction * yawLimit * speedFactor
       const inertia = (mass * (def.width * def.width + def.length * def.length)) / 12
       const yawError = targetYawRate - angular.y
-      const torque = yawError * inertia * STEER_RESPONSE * dt
+      const torque = yawError * inertia * TUNING.carSteerResponse * dt
       body.applyTorqueImpulse({ x: 0, y: torque, z: 0 }, true)
 
       if (import.meta.env.DEV) {
@@ -370,16 +373,16 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       if (braking) {
         const speed = Math.hypot(velocity.x, velocity.z)
         if (speed > 0.02) {
-          const factor = Math.max(0, 1 - BRAKE * dt)
+          const factor = Math.max(0, 1 - TUNING.carBrake * dt)
           body.setLinvel({ x: velocity.x * factor, y: velocity.y, z: velocity.z * factor }, true)
         }
-        body.setAngvel({ x: 0, y: angular.y * Math.max(0, 1 - BRAKE * dt), z: 0 }, true)
+        body.setAngvel({ x: 0, y: angular.y * Math.max(0, 1 - TUNING.carBrake * dt), z: 0 }, true)
       }
 
       // ─── Ограничение максимальной скорости ──────────────────────────────
       const horizontalSpeed = Math.hypot(velocity.x, velocity.z)
-      if (horizontalSpeed > MAX_SPEED) {
-        const scale = MAX_SPEED / horizontalSpeed
+      if (horizontalSpeed > TUNING.carMaxSpeed) {
+        const scale = TUNING.carMaxSpeed / horizontalSpeed
         body.setLinvel({ x: velocity.x * scale, y: velocity.y, z: velocity.z * scale }, true)
       }
 
