@@ -38,22 +38,55 @@ await new Promise((r) => setTimeout(r, 4000))
 if (process.env.CAR === '1') {
   // Садимся в машину и снимаем поворот — нужен dev-сервер с хуками.
   const parked = await page.evaluate(() => window.__carState?.parked ?? [])
-  if (parked.length > 0) {
-    await page.evaluate((target) => {
-      window.__playerState.body.setTranslation(
-        { x: target.x + 1.2, y: 1.2, z: target.z },
-        true,
-      )
-    }, parked[0])
-    await new Promise((r) => setTimeout(r, 800))
-    await page.keyboard.press('KeyF')
-    await new Promise((r) => setTimeout(r, 600))
-  }
+  // Берём машину ближе к центру города, чтобы не уехать за карту.
+  const target = await page.evaluate((list) => {
+    let best = list[0]
+    let bestD = Infinity
+    for (const c of list) {
+      const d = Math.hypot(c.x, c.z)
+      if (d < bestD) {
+        bestD = d
+        best = c
+      }
+    }
+    return best
+  }, parked)
+  await page.evaluate((t) => {
+    window.__playerState.body.setTranslation({ x: t.x + 1.2, y: 1.2, z: t.z }, true)
+  }, target)
+  await new Promise((r) => setTimeout(r, 800))
+  await page.keyboard.press('KeyF')
+  await new Promise((r) => setTimeout(r, 600))
+
   await page.keyboard.down('KeyW')
-  await new Promise((r) => setTimeout(r, 2200))
+  await new Promise((r) => setTimeout(r, 1800))
   await page.keyboard.down('KeyA')
   await new Promise((r) => setTimeout(r, 900))
+
+  const camInfo = await page.evaluate(() => {
+    const p = window.__playerState
+    const cam = window.__camera
+    return {
+      dist: cam ? cam.position.distanceTo(p.position) : -1,
+      carYaw: p.carYaw,
+      speed: p.carForwardSpeed,
+    }
+  })
+  console.log('камера до кузова:', camInfo.dist.toFixed(2), 'м | курс', camInfo.carYaw.toFixed(2))
+
+  // Свободная камера: смотрим на машину сбоку и сверху, чтобы оценить кузов.
+  await page.evaluate(() => {
+    const p = window.__playerState.position
+    window.__freeCam = {
+      pos: [p.x + 9, p.y + 5, p.z + 9],
+      look: [p.x, p.y, p.z],
+    }
+  })
+  await new Promise((r) => setTimeout(r, 900))
   await page.screenshot({ path: OUT })
+  await page.evaluate(() => {
+    window.__freeCam = undefined
+  })
   await page.keyboard.up('KeyA')
   await page.keyboard.up('KeyW')
 } else {
