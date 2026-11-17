@@ -307,7 +307,13 @@ export function CityGenerator({ config = DEFAULT_CITY }: { config?: CityConfig }
 
       {/* ─── Коллайдеры ──────────────────────────────────────────────────────── */}
       <RigidBody type="fixed" colliders={false} friction={0.9}>
-        <CuboidCollider args={[GROUND_SIZE / 2, 1, GROUND_SIZE / 2]} position={[0, -1, 0]} />
+        {/* Асфальт скользкий: иначе сила трения покоя (μ·m·g) превышает тягу
+            мотора, и припаркованные машины нельзя сдвинуть с места. */}
+        <CuboidCollider
+          args={[GROUND_SIZE / 2, 1, GROUND_SIZE / 2]}
+          position={[0, -1, 0]}
+          friction={0.15}
+        />
 
         {data.blocks.map((block, index) => (
           <CuboidCollider

@@ -16,9 +16,9 @@ const MAX_SPEED = 22
 /** Максимальная скорость заднего хода, м/с. */
 const MAX_REVERSE_SPEED = 8
 /** Ускорение двигателя вперёд, м/с². */
-const ENGINE_ACCEL = 7.5
+const ENGINE_ACCEL = 9
 /** Ускорение двигателя назад, м/с². */
-const REVERSE_ACCEL = 4
+const REVERSE_ACCEL = 5
 /** Угловое ускорение при полном выкрученном руле, рад/с². */
 const STEER_ACCEL = 4.5
 /** Скорость, на которой руль работает в полную силу, м/с. */
@@ -42,6 +42,18 @@ const carSide = new THREE.Vector3()
 /** Припаркованная машина с идентификатором — по нему её находит игрок. */
 interface Car extends ParkedCarDef {
   id: string
+}
+
+/** Dev-хук: состояние вождения — видно из консоли без отладчика. */
+const carDebug = {
+  isDriving: false,
+  currentCarId: null as string | null,
+  speed: 0,
+  throttle: 0,
+}
+
+if (import.meta.env.DEV) {
+  ;(globalThis as unknown as { __carState: typeof carDebug }).__carState = carDebug
 }
 
 /**
@@ -167,7 +179,10 @@ function ParkedCar({
       friction={0.9}
       restitution={0}
     >
-      <CuboidCollider args={[def.width / 2, def.height / 2, def.length / 2]} friction={0.9} />
+      <CuboidCollider
+        args={[def.width / 2, def.height / 2, def.length / 2]}
+        friction={0}
+      />
       <mesh geometry={chassis} material={chassisMaterial} castShadow receiveShadow />
       <mesh geometry={wheels} material={wheelMaterial} castShadow />
     </RigidBody>
@@ -361,6 +376,9 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       playerState.position.set(t.x, t.y, t.z)
       const speed = body.linvel()
       playerState.speed = Math.hypot(speed.x, speed.z)
+
+      carDebug.speed = playerState.speed
+      carDebug.throttle = throttle
     },
     [cars],
   )
@@ -380,6 +398,8 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
     if (drivingIndex >= 0) {
       drive(drivingIndex, dt)
       setCarPrompt('Нажми F, чтобы выйти')
+      carDebug.isDriving = true
+      carDebug.currentCarId = carState.currentCarId
       if (pressedF) exitCar(drivingIndex)
       return
     }
@@ -403,6 +423,10 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
 
     if (pressedF && nearest >= 0) enterCar(nearest)
     setCarPrompt(nearest >= 0 ? 'Нажми F, чтобы сесть' : null)
+    carDebug.isDriving = false
+    carDebug.currentCarId = null
+    carDebug.speed = 0
+    carDebug.throttle = 0
   })
 
   return (
