@@ -60,6 +60,8 @@ const carDebug = {
   throttle: 0,
   /** Позиции припаркованных машин — удобно для отладки и автотестов. */
   parked: [] as { x: number; z: number }[],
+  /** Внутренние значения руля: цель, факт и ограничения. */
+  steer: { target: 0, actual: 0, limit: 0, authority: 0 },
 }
 
 if (import.meta.env.DEV) {
@@ -365,6 +367,13 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       const yawError = targetYawRate - angular.y
       const torque = yawError * inertia * STEER_RESPONSE * dt
       body.applyTorqueImpulse({ x: 0, y: torque, z: 0 }, true)
+
+      if (import.meta.env.DEV) {
+        carDebug.steer.target = targetYawRate
+        carDebug.steer.actual = angular.y
+        carDebug.steer.limit = yawLimit
+        carDebug.steer.authority = speedFactor
+      }
 
       // ─── Тормоз ───────────────────────────────────────────────────────────
       if (braking) {

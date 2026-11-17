@@ -58,6 +58,10 @@ const sample = (ms) =>
             yaw: p.carYaw,
             yawRate: p.carYawRate,
             speed: window.__carState.speed,
+            target: window.__carState.steer.target,
+            actual: window.__carState.steer.actual,
+            limit: window.__carState.steer.limit,
+            authority: window.__carState.steer.authority,
           })
           if (performance.now() - start < duration) requestAnimationFrame(tick)
           else resolve(rows)
@@ -123,6 +127,12 @@ async function steerTest(label, throttleMs, steerMs) {
 
   console.log(`--- ${label} ---`)
   console.log(`скорость до: ${before.speed.toFixed(1)} м/с`)
+  console.log(
+    `цель руля: ${((mid.target * 180) / Math.PI).toFixed(1)}°/с | факт: ${(
+      (mid.actual * 180) /
+      Math.PI
+    ).toFixed(1)}°/с | лимит: ${((mid.limit * 180) / Math.PI).toFixed(1)}°/с | полномочия: ${mid.authority.toFixed(2)}`,
+  )
   console.log(
     `кузов: ${((delta * 180) / Math.PI).toFixed(1)}° за ${(steerMs / 1000).toFixed(1)} c, ` +
       `в середине ${((mid.yawRate * 180) / Math.PI).toFixed(1)}°/с`,
