@@ -159,6 +159,21 @@ console.log(
 )
 
 const failed = results.filter((r) => !r.ok)
+
+// 6. Ось Y не заблокирована: эффективная инерция по Y должна быть не нулевой.
+const inertiaY = await page.evaluate(() => {
+  const b = window.__carState.body
+  const eff = b.effectiveAngularInertia()
+  const el = eff.elements
+  return { yy: el[4] ?? el.y ?? 0, principal: b.principalInertia().y }
+})
+const lockOk = inertiaY.yy > 0
+results.push({ label: '6. Ось Y не заблокирована', ok: lockOk })
+console.log(
+  `${lockOk ? '✓' : '✗'} 6. Ось Y не заблокирована: эффективная инерция Y = ` +
+    `${inertiaY.yy.toFixed(3)} (принципиальная ${inertiaY.principal.toFixed(3)})`,
+)
+
 console.log(`\nИТОГ: ${results.length - failed.length}/${results.length} проверок пройдено`)
 await browser.close()
 process.exit(failed.length ? 1 : 0)
