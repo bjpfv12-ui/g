@@ -22,6 +22,8 @@ export const playerState = {
   carYawRate: 0,
   /** Тело игрока — камера исключает его из своих лучей. */
   body: null as RapierRigidBody | null,
+  /** Тело машины, пока игрок за рулём: камера исключает и его. */
+  carBody: null as RapierRigidBody | null,
 }
 
 // Dev-хук: позволяет из devtools/теста телепортировать игрока.

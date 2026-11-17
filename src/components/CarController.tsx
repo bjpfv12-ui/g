@@ -257,6 +257,10 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // физически не может провернуть машину — она словно на рельсах.
       body.collider(0)?.setFrictionCombineRule(CoefficientCombineRule.Min)
 
+      // Камера не должна цеплять коллайдер машины — иначе она прижимается
+      // к кузову и не видно, куда едешь.
+      playerState.carBody = body
+
       // Персонаж прячем целиком: тело отключаем, меш гасит PlayerController.
       playerState.body?.setEnabled(false)
     },
@@ -279,6 +283,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       body.setAngvel({ x: 0, y: 0, z: 0 }, true)
       // Возвращаем обычное трение — припаркованная машина должна стоять.
       body.collider(0)?.setFrictionCombineRule(CoefficientCombineRule.Average)
+      playerState.carBody = null
 
       // Возвращаем игрока у двери — со стороны бордюра.
       const player = playerState.body
