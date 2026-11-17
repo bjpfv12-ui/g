@@ -58,13 +58,22 @@ const target = await page.evaluate((list) => {
   }
   return best
 }, parked)
-await page.evaluate((t) => {
-  window.__playerState.body.setTranslation({ x: t.x + 1.2, y: 1.2, z: t.z }, true)
-}, target)
-await new Promise((r) => setTimeout(r, 800))
-await page.keyboard.press('KeyF')
-await new Promise((r) => setTimeout(r, 700))
-if (!(await read()).speed >= 0 || !(await page.evaluate(() => window.__carState.isDriving))) {
+let seated = false
+for (const offset of [1.2, -1.2, 0, 2.2]) {
+  await page.evaluate(
+    (t, dx) => {
+      window.__playerState.body.setTranslation({ x: t.x + dx, y: 1.2, z: t.z }, true)
+    },
+    target,
+    offset,
+  )
+  await new Promise((r) => setTimeout(r, 800))
+  await page.keyboard.press('KeyF')
+  await new Promise((r) => setTimeout(r, 600))
+  seated = await page.evaluate(() => window.__carState.isDriving)
+  if (seated) break
+}
+if (!seated) {
   console.log('не сели в машину')
   await browser.close()
   process.exit(1)
