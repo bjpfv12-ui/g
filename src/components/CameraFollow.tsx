@@ -25,6 +25,25 @@ const PROBE_RADIUS = 0.45
 const FOLLOW_LAMBDA = 12
 /** Насколько резко камера доворачивает взгляд на игрока. */
 const LOOK_LAMBDA = 18
+/** Сколько секунд можно не трогать мышь, чтобы камера сама поехала за машиной. */
+const CAR_ALIGN_DELAY = 0.7
+/** Насколько плавно камера догоняет курс машины, 1/с. */
+const CAR_ALIGN_RATE = 1.8
+/** Минимальная скорость машины, с которой камера возвращается за кузов, м/с. */
+const CAR_ALIGN_SPEED = 1.5
+
+/** Разница углов по кратчайшей дуге, от -π до π. */
+function angleDiff(target: number, current: number): number {
+  let diff = target - current
+  while (diff > Math.PI) diff -= Math.PI * 2
+  while (diff < -Math.PI) diff += Math.PI * 2
+  return diff
+}
+
+/** Плавный поворот угла через кратчайшую дугу. */
+function lerpAngle(current: number, target: number, t: number): number {
+  return current + angleDiff(target, current) * t
+}
 
 /**
  * Точки, в которых проверяем препятствия: центр и четыре смещения, чтобы
@@ -51,6 +70,8 @@ export function CameraFollow() {
   const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera
   const { world, rapier } = useRapier()
   const lookTarget = useRef(new THREE.Vector3(0, 1.5, 0))
+  /** Сколько секунд прошло с последнего движения мыши. */
+  const mouseIdle = useRef(0)
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 1 / 30)
