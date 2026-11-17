@@ -44,24 +44,37 @@ const carState = () =>
   }))
 
 // ─── 1. Ищем припаркованную машину и садимся ───────────────────────────────
-await page.keyboard.down('KeyW')
-let seated = false
-for (let i = 0; i < 40; i++) {
-  await new Promise((r) => setTimeout(r, 250))
-  if ((await prompt()).includes('сесть')) {
-    await page.keyboard.up('KeyW')
-    await page.keyboard.press('KeyF')
-    await new Promise((r) => setTimeout(r, 500))
-    if ((await carState()).isDriving) {
-      seated = true
-      break
-    }
-  }
+const parked = await page.evaluate(() => window.__carState.parked ?? [])
+if (parked.length === 0) {
+  console.log('нет данных о припаркованных машинах')
+  await browser.close()
+  process.exit(1)
 }
-await page.keyboard.up('KeyW')
+
+// Ставим игрока вплотную к первой машине и садимся.
+await page.evaluate((target) => {
+  const body = window.__playerState.body
+  body.setTranslation({ x: target.x + 1.2, y: 1.2, z: target.z }, true)
+}, parked[0])
+await new Promise((r) => setTimeout(r, 900))
+await page.keyboard.press('KeyF')
+await new Promise((r) => setTimeout(r, 700))
+
+let seated = (await carState()).isDriving
+if (!seated) {
+  // Подходим ближе — иногда проём один и тот же, но с другой стороны.
+  await page.evaluate((target) => {
+    const body = window.__playerState.body
+    body.setTranslation({ x: target.x - 1.2, y: 1.2, z: target.z }, true)
+  }, parked[0])
+  await new Promise((r) => setTimeout(r, 900))
+  await page.keyboard.press('KeyF')
+  await new Promise((r) => setTimeout(r, 700))
+  seated = (await carState()).isDriving
+}
 
 if (!seated) {
-  console.log('не удалось сесть в машину рядом со спавном')
+  console.log('не удалось сесть в машину; промпт:', await prompt())
   await browser.close()
   process.exit(1)
 }
