@@ -71,6 +71,8 @@ const carDebug = {
   /** Тело и габариты текущей машины — для автотестов и замеров. */
   body: null as RapierRigidBody | null,
   dims: { width: 0, length: 0, height: 0 },
+  /** Направление от осевой линии дороги к бордюру — куда уезжать на тротуар. */
+  curbDir: [0, 0] as [number, number],
   /** Покадровая трасса руля — только для DEV-диагностики. */
   trace: [] as {
     t: number
@@ -571,6 +573,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       carDebug.dims.width = def.width
       carDebug.dims.length = def.length
       carDebug.dims.height = def.height
+      carDebug.curbDir = def.curbDir
       if (import.meta.env.DEV && carDebug.traceOn) {
         carDebug.trace.push({
           t: performance.now(),
