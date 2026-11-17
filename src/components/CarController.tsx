@@ -15,11 +15,11 @@ const INTERACT_RADIUS = 3
 /** Насколько машина выезжает из бордюра при выходе, м. */
 const EXIT_OFFSET = 0.75
 /**
- * Запас по скорости, за которым меняется направление руля (вперёд/назад), м/с.
- * Без него знак скорости дребезжит на месте и при ударе о бордюр — руль
- * начинает дёргаться вместо поворота.
+ * Скорость, за которой передача переключается «вперёд ↔ назад», м/с.
+ * Ниже этого порога ориентироваться на знак скорости нельзя: на месте и
+ * при отскоке от бордюра она дребезжит, и руль дёргается вместо поворота.
  */
-const STEER_DIRECTION_THRESHOLD = 1
+const GEAR_SPEED = 2.5
 
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -403,12 +403,20 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         1,
       )
 
-      // Направление руля по знаку едущей скорости: на заднем ходу машина
-      // доворачивает в другую сторону. Знак берём с запасом (±1 м/с): без
-      // него знак дребезжит на месте и после удара о бордюр, цель руля
-      // скачет между ±, и машина не крутится, а дёргается на месте.
-      if (forwardSpeed > STEER_DIRECTION_THRESHOLD) steerDirection.current = 1
-      else if (forwardSpeed < -STEER_DIRECTION_THRESHOLD) steerDirection.current = -1
+      // Передача: 1 — вперёд, -1 — назад. Задаётся газом, а переключение
+      // проходит через «нейтраль»: пока машина едет в одну сторону, руль
+      // не переворачивается. Ориентироваться только на знак скорости нельзя
+      // — на месте и после отскока от бордюра она дребезжит, и руль вместо
+      // поворота начинает дёргаться туда-сюда.
+      if (throttle > 0 && forwardSpeed > -GEAR_SPEED) {
+        steerDirection.current = 1
+      } else if (throttle < 0 && forwardSpeed < GEAR_SPEED) {
+        steerDirection.current = -1
+      } else if (forwardSpeed > GEAR_SPEED) {
+        steerDirection.current = 1
+      } else if (forwardSpeed < -GEAR_SPEED) {
+        steerDirection.current = -1
+      }
       const direction = steerDirection.current
 
       // Целевая скорость поворота кузова, рад/с.
