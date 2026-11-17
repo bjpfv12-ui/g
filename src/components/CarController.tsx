@@ -20,15 +20,17 @@ const ENGINE_ACCEL = 9
 /** Ускорение двигателя назад, м/с². */
 const REVERSE_ACCEL = 5
 /** Угловое ускорение при полном выкрученном руле, рад/с². */
-const STEER_ACCEL = 4.5
+const STEER_ACCEL = 7
 /** Скорость, на которой руль работает в полную силу, м/с. */
-const STEER_FULL_SPEED = 9
+const STEER_FULL_SPEED = 6
+/** Минимум полномочий руля — на малой скорости машина всё равно должна крутиться. */
+const MIN_STEER_AUTHORITY = 0.4
 /** Скорость гашения бокового скольжения, 1/с. */
-const GRIP = 6
+const GRIP = 8
 /** Тормоз: доля скорости, снимаемая за секунду. */
 const BRAKE = 6
 /** Затухание вращения кузова, 1/с — руль возвращается в «прямо». */
-const ANGULAR_DAMP = 1.6
+const ANGULAR_DAMP = 1.4
 /** Насколько машина выезжает из бордюра при выходе, м. */
 const EXIT_OFFSET = 0.75
 
@@ -338,9 +340,11 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       }
 
       // ─── Руль ─────────────────────────────────────────────────────────────
+      // Полномочия руля растут со скоростью, но на пешей скорости машина
+      // всё равно должна кое-как поворачивать.
       const speedFactor = THREE.MathUtils.clamp(
         Math.abs(forwardSpeed) / STEER_FULL_SPEED,
-        0,
+        MIN_STEER_AUTHORITY,
         1,
       )
       if (speedFactor > 0.01 && steer !== 0) {
