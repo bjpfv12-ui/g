@@ -63,11 +63,6 @@ function angleDiff(target: number, current: number): number {
   return diff
 }
 
-/** Плавный поворот угла через кратчайшую дугу. */
-function lerpAngle(current: number, target: number, t: number): number {
-  return current + angleDiff(target, current) * t
-}
-
 export function PlayerController({ spawn }: { spawn: [number, number, number] }) {
   const body = useRef<RapierRigidBody>(null)
   const { world, rapier } = useRapier()

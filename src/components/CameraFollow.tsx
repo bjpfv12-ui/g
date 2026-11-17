@@ -6,13 +6,20 @@ import { useInputStore } from '../store/InputStore'
 import { useCameraStore } from '../store/CameraStore'
 import { playerState } from '../state/playerState'
 
-const SENSITIVITY = 0.0022
+const SENSITIVITY = 0.0026
 const MIN_PITCH = -0.38
 const MAX_PITCH = 1.2
 const HEIGHT_OFFSET = 0.58
 const SHOULDER_OFFSET = 0.55
 const BASE_FOV = 66
 const SPRINT_FOV = 74
+/**
+ * Скорость поворота камеры клавишами A/D, рад/с.
+ *
+ * Намеренно медленнее мыши: клавишами удобно вести длинную дугу, а мышью —
+ * быстро довернуть прицел. Корпус доворачивается следом за камерой.
+ */
+const KEY_TURN_RATE = 2.8
 /** Минимальная высота камеры над землёй, м. */
 const GROUND_CLEARANCE = 0.9
 /** Минимальное расстояние от камеры до игрока, м. */
@@ -110,6 +117,21 @@ export function CameraFollow() {
       cam.setPitch(nextPitch)
     } else {
       mouseIdle.current += dt
+    }
+
+    // ─── Поворот камеры клавишами A/D ─────────────────────────────────────────
+    // На ногах A/D доворачивают камеру вокруг персонажа, и корпус доворачивается
+    // следом за ней (см. PlayerController) — получается плавная дуга.
+    // За рулём A/D рулят машиной, поэтому там поворот камеры не трогаем.
+    if (!playerState.driving) {
+      const keys = input.keys
+      const turn =
+        (keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0) +
+        (keys['KeyD'] || keys['ArrowRight'] ? -1 : 0)
+      if (turn !== 0) {
+        const store = useCameraStore.getState()
+        store.setYaw(store.yaw + turn * KEY_TURN_RATE * dt)
+      }
     }
 
     // ─── Камера возвращается за машину ───────────────────────────────────────

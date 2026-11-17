@@ -49,7 +49,10 @@ export function Hud() {
 
       <div className="hud__controls">
         <span>
-          <b>WASD</b> движение
+          <b>W/S</b> движение
+        </span>
+        <span>
+          <b>A/D</b> поворот
         </span>
         <span>
           <b>Shift</b> бег
@@ -94,9 +97,9 @@ export function Hud() {
             <h1>Sunset District</h1>
             <p>Кликните по экрану, чтобы войти в город.</p>
             <ul>
-              <li>WASD — движение относительно камеры</li>
+              <li>W/S — движение по курсу персонажа, A/D — поворот</li>
               <li>Shift — спринт, Space — прыжок</li>
-              <li>Мышь — орбитальная камера</li>
+              <li>Мышь — прицел и орбитальная камера</li>
             </ul>
             <span className="hud__cta">клик → захват мыши</span>
           </div>
