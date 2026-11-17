@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody, CoefficientCombineRule, type RapierRigidBody } from '@react-three/rapier'
@@ -241,6 +241,17 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   const indexById = useMemo(() => new Map(cars.map((car, i) => [car.id, i])), [cars])
 
   const bodies = useRef<(RapierRigidBody | null)[]>([])
+  /**
+   * Счётчики пересоздания кузов: если тело физики сломано (NaN), Rapier
+   * больше не отдаёт его состояние. Тогда пересоздаём RigidBody — машина
+   * возвращается к жизни вместо того, чтобы потерять руль навсегда.
+   */
+  const [respawn, setRespawn] = useState<Record<number, number>>({})
+
+  /** Пересоздать кузов машины с заданным индексом. */
+  const respawnCar = useCallback((index: number) => {
+    setRespawn((prev) => ({ ...prev, [index]: (prev[index] ?? 0) + 1 }))
+  }, [])
   /** Направление руля: 1 — вперёд, -1 — назад. Меняется с запасом по скорости. */
   const steerDirection = useRef(1)
   /** Сколько секунд машина едет назад подряд — для переключения передачи. */
@@ -410,9 +421,6 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
 
       const forward = carForward
       const side = carSide
-
-      const velocity = body.linvel()
-      const angular = body.angvel()
 
       const forwardSpeed = velocity.x * forward.x + velocity.z * forward.z
       const sideSpeed = velocity.x * side.x + velocity.z * side.z
@@ -729,7 +737,8 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
     <group>
       {cars.map((def, index) => (
         <ParkedCar
-          key={def.id}
+          // Счётчик пересоздания: сломанное тело физики заменяется новым.
+          key={`${def.id}-${respawn[index] ?? 0}`}
           def={def}
           index={index}
           chassisMaterial={chassisMaterial}
