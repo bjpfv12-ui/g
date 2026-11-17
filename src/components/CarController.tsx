@@ -14,6 +14,12 @@ import { TUNING } from '../tuning'
 const INTERACT_RADIUS = 3
 /** Насколько машина выезжает из бордюра при выходе, м. */
 const EXIT_OFFSET = 0.75
+/**
+ * Запас по скорости, за которым меняется направление руля (вперёд/назад), м/с.
+ * Без него знак скорости дребезжит на месте и при ударе о бордюр — руль
+ * начинает дёргаться вместо поворота.
+ */
+const STEER_DIRECTION_THRESHOLD = 1
 
 const UP = new THREE.Vector3(0, 1, 0)
 
@@ -41,6 +47,10 @@ const carDebug = {
     actual: 0,
     limit: 0,
     authority: 0,
+    /** Направление руля: 1 — вперёд, -1 — назад. */
+    direction: 1,
+    /** Крутящий момент, который прикладывается к кузову, Н·м. */
+    turnForce: 0,
   },
   /** Сырая угловая скорость тела из Rapier — для проверки, что вращение не сбрасывается. */
   angvel: { x: 0, y: 0, z: 0 },
@@ -181,6 +191,9 @@ function ParkedCar({
       type="dynamic"
       position={def.position}
       rotation={[0, def.yaw, 0]}
+      // Вращение разрешено только вокруг вертикальной оси Y: руль крутит
+      // кузов, а наклон и переворот (X/Z) физике не нужны — так машина
+      // не заваливается на бок и не переворачивается на бордюре.
       enabledRotations={[false, true, false]}
       linearDamping={0.25}
       angularDamping={0.5}
@@ -205,6 +218,10 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   const indexById = useMemo(() => new Map(cars.map((car, i) => [car.id, i])), [cars])
 
   const bodies = useRef<(RapierRigidBody | null)[]>([])
+  /** Направление руля: 1 — вперёд, -1 — назад. Меняется с запасом по скорости. */
+  const steerDirection = useRef(1)
+  /** До какого момента (мс) печатаем angVel в консоль — 1 с после нажатия A/D. */
+  const steerLogUntil = useRef(0)
 
   const setCarPrompt = useUiStore((state) => state.setCarPrompt)
 
@@ -378,36 +395,76 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       }
 
       // ─── Руль ─────────────────────────────────────────────────────────────
-      // Управляем не моментом, а целевой скоростью поворота кузова.
-      // Так руль сам возвращается в «прямо», а на большой скорости угол
-      // ограничивается — как в настоящей машине.
-      const speedFactor = THREE.MathUtils.clamp(
-        Math.abs(forwardSpeed) / TUNING.carSteerFullSpeed,
+      // Полномочия руля падают с ростом скорости: на месте машина
+      // доворачивает сильнее всего, на скорости — слабее всего.
+      const authority = THREE.MathUtils.clamp(
+        1 - Math.abs(forwardSpeed) / TUNING.carSteerFalloffSpeed,
         TUNING.carMinSteerAuthority,
         1,
       )
-      // carYawFalloff = 0 — спада нет, руль одинаково резкий на любой скорости.
-      const yawLimit =
-        TUNING.carYawFalloff > 0
-          ? TUNING.carMaxYawRate /
-            (1 + Math.abs(forwardSpeed) / TUNING.carYawFalloff)
-          : TUNING.carMaxYawRate
-      // На заднем ходу руль работает наоборот.
-      const direction = forwardSpeed < 0 ? -1 : 1
-      const targetYawRate = steer * direction * yawLimit * speedFactor
+
+      // Направление руля по знаку едущей скорости: на заднем ходу машина
+      // доворачивает в другую сторону. Знак берём с запасом (±1 м/с): без
+      // него знак дребезжит на месте и после удара о бордюр, цель руля
+      // скачет между ±, и машина не крутится, а дёргается на месте.
+      if (forwardSpeed > STEER_DIRECTION_THRESHOLD) steerDirection.current = 1
+      else if (forwardSpeed < -STEER_DIRECTION_THRESHOLD) steerDirection.current = -1
+      const direction = steerDirection.current
+
+      // Целевая скорость поворота кузова, рад/с.
+      const targetYawRate = steer * direction * TUNING.carMaxYawRate * authority
+
+      // Гасим остаточное вращение и обнуляем боковые оси X/Z — кузов не
+      // заваливается на бок. Множитель задан на 60 кадров в секунду.
+      const dampFactor = Math.pow(TUNING.carYawDamping, dt * 60)
+      const damped = angular.y * dampFactor
+
+      // К цели идём сглаженно: carSteerResponse задаёт, как быстро руль
+      // набирает полномочия. Инерция берётся из габаритов кузова.
       const inertia = (mass * (def.width * def.width + def.length * def.length)) / 12
-      const yawError = targetYawRate - angular.y
-      const torque = yawError * inertia * TUNING.carSteerResponse * dt
-      body.applyTorqueImpulse({ x: 0, y: torque, z: 0 }, true)
+      const step = Math.min(1, TUNING.carSteerResponse * dt)
+      const nextYawRate = damped + (targetYawRate - damped) * step
+
+      // Момент подбираем так, чтобы за шаг скорость вращения дошла до
+      // nextYawRate: импульс = Δω · инерция.
+      const turnForce = ((nextYawRate - damped) * inertia) / dt
+
+      // Порядок важен! applyTorqueImpulse меняет angvel сразу, а setAngvel
+      // перезаписывает его — если сначала крутим, а потом гасим, импульс
+      // теряется и руль не работает вовсе.
+      body.setAngvel({ x: 0, y: damped, z: 0 }, true)
+      body.applyTorqueImpulse({ x: 0, y: turnForce * dt, z: 0 }, true)
 
       if (import.meta.env.DEV) {
         carDebug.steer.target = targetYawRate
         carDebug.steer.actual = angular.y
-        carDebug.steer.limit = yawLimit
-        carDebug.steer.authority = speedFactor
+        carDebug.steer.limit = TUNING.carMaxYawRate
+        carDebug.steer.authority = authority
+        carDebug.steer.direction = direction
+        carDebug.steer.turnForce = turnForce
         carDebug.angvel.x = angular.x
         carDebug.angvel.y = angular.y
         carDebug.angvel.z = angular.z
+      }
+
+      // ─── Диагностика руля: 1 секунда лога при нажатии A/D (только DEV) ───
+      if (import.meta.env.DEV) {
+        const now = performance.now()
+        if (steer !== 0) {
+          if (now > steerLogUntil.current) {
+            steerLogUntil.current = now + 1000
+            console.log('[car] руль: лог на 1 с, angVel:', body.angvel())
+          } else {
+            console.log(
+              '[car] angVel:',
+              body.angvel(),
+              'цель, рад/с:',
+              targetYawRate.toFixed(3),
+              'направление:',
+              direction,
+            )
+          }
+        }
       }
 
       // ─── Тормоз ───────────────────────────────────────────────────────────
@@ -453,7 +510,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
           forwardSpeed,
           target: targetYawRate,
           yaw: playerState.carYaw,
-          torque,
+          torque: turnForce,
           angvel: angular.y,
         })
         if (carDebug.trace.length > 4000) carDebug.trace.shift()
