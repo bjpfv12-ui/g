@@ -685,7 +685,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         if (carDebug.trace.length > 4000) carDebug.trace.shift()
       }
     },
-    [cars],
+    [cars, respawnCar],
   )
 
   useFrame((_, delta) => {
