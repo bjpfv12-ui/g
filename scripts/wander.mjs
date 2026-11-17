@@ -35,6 +35,14 @@ if (CPU > 1) {
   console.log(`просадка CPU x${CPU}`)
 }
 
+page.on('console', (m) => {
+  const t = m.text()
+  if (!t.startsWith('[car] angVel:')) console.log('  КОНСОЛЬ:', t.slice(0, 160))
+})
+page.on('pageerror', (e) => {
+  console.log('  ОШИБКА СТРАНИЦЫ:', e.message.slice(0, 160))
+})
+
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 })
 
 // Ждём, пока мир и физика прогрузятся (при просадке CPU это долго).
