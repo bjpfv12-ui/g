@@ -62,6 +62,10 @@ const sample = (ms) =>
             actual: window.__carState.steer.actual,
             limit: window.__carState.steer.limit,
             authority: window.__carState.steer.authority,
+            friction: window.__carState.steer.friction,
+            combine: window.__carState.steer.combine,
+            inertia: window.__carState.steer.inertia,
+            mass: window.__carState.steer.mass,
           })
           if (performance.now() - start < duration) requestAnimationFrame(tick)
           else resolve(rows)
