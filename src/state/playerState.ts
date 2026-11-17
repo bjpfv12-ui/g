@@ -24,6 +24,8 @@ export const playerState = {
   body: null as RapierRigidBody | null,
   /** Тело машины, пока игрок за рулём: камера исключает и его. */
   carBody: null as RapierRigidBody | null,
+  /** Насколько кузов машины перевёрнут: 1 — стоит на колёсах, 0 — на боку. */
+  carUpY: 1,
 }
 
 // Dev-хук: позволяет из devtools/теста телепортировать игрока.
