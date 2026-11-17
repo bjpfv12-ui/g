@@ -287,9 +287,18 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   )
 
   /** Регистрация тела машины в общем массиве — по индексу из карты города. */
-  const register = useCallback((index: number, body: RapierRigidBody | null) => {
-    bodies.current[index] = body
-  }, [])
+  const register = useCallback(
+    (index: number, body: RapierRigidBody | null) => {
+      bodies.current[index] = body
+      // Тело пересоздали (сломанная физика) — обновляем ссылку камеры,
+      // иначе она продолжит следить за уже несуществующим телом.
+      const currentId = useCarStore.getState().currentCarId
+      if (body && playerState.driving && currentId && indexById.get(currentId) === index) {
+        playerState.carBody = body
+      }
+    },
+    [indexById],
+  )
 
   // ─── Шаг 2: вход в машину ─────────────────────────────────────────────────
   const enterCar = useCallback(
