@@ -353,8 +353,10 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         const drag = Math.max(0, 1 - TUNING.carTurnDrag * slip * dt)
         const wantX = forward.x * speedNow * drag
         const wantZ = forward.z * speedNow * drag
+        const nextX = velocity.x + (wantX - velocity.x) * follow
+        const nextZ = velocity.z + (wantZ - velocity.z) * follow
         body.applyImpulse(
-          { x: (wantX - velocity.x) * mass, y: 0, z: (wantZ - velocity.z) * mass },
+          { x: (nextX - velocity.x) * mass, y: 0, z: (nextZ - velocity.z) * mass },
           true,
         )
       }
