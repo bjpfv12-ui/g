@@ -431,7 +431,11 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // набирает полномочия. Инерция берётся из габаритов кузова.
       const inertia = (mass * (def.width * def.width + def.length * def.length)) / 12
       const step = Math.min(1, TUNING.carSteerResponse * dt)
-      const nextYawRate = damped + (targetYawRate - damped) * step
+      // Гашение съедает часть скорости поворота, поэтому целевую запрашиваем
+      // с запасом — иначе фактическая скорость была бы ниже заданной.
+      const compensation = (1 - dampFactor + step * dampFactor) / step
+      const requested = targetYawRate * compensation
+      const nextYawRate = damped + (requested - damped) * step
 
       // Момент подбираем так, чтобы за шаг скорость вращения дошла до
       // nextYawRate: импульс = Δω · инерция.
