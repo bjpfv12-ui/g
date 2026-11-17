@@ -180,7 +180,7 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
     if (jumpPressed && coyote.current > 0) {
       vx = velocity.x
       vz = velocity.z
-      rb.setLinvel({ x: vx, y: JUMP_SPEED, z: vz }, true)
+      rb.setLinvel({ x: vx, y: t.jumpSpeed, z: vz }, true)
       coyote.current = 0
       grounded = false
     } else {
@@ -194,7 +194,7 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
     if (hopCooldown.current > 0) {
       hopCooldown.current = Math.max(0, hopCooldown.current - dt)
     }
-    if (grounded && moveInput && hopCooldown.current <= 0) {
+    if (grounded && moving && hopCooldown.current <= 0) {
       const feetY = position.y - FOOT_OFFSET
       const stepRay = new rapier.Ray(
         { x: position.x, y: feetY + 0.12, z: position.z },
@@ -202,7 +202,7 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
       )
       const stepHit = world.castRay(
         stepRay,
-        STEP_LOOK_AHEAD,
+        t.stepLookAhead,
         true,
         undefined,
         undefined,
@@ -217,9 +217,9 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
           const top = stepHit.collider.translation().y + shape.halfExtents.y
           const rise = top - feetY
           // Запрыгиваем только на настоящую ступеньку: не на шов и не на стену.
-          if (rise > MIN_STEP_HEIGHT && rise <= MAX_STEP_HEIGHT) {
-            rb.setLinvel({ x: vx, y: STEP_HOP_SPEED, z: vz }, true)
-            hopCooldown.current = STEP_HOP_COOLDOWN
+          if (rise > t.minStepHeight && rise <= t.maxStepHeight) {
+            rb.setLinvel({ x: vx, y: t.stepHopSpeed, z: vz }, true)
+            hopCooldown.current = t.stepHopCooldown
             grounded = false
           }
         }
@@ -239,7 +239,7 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
     // стоя — едва заметен.
     const turnSpeed = dt > 0 ? turnStep / dt : 0
     const leanTarget = grounded
-      ? THREE.MathUtils.clamp(turnSpeed / LEAN_FULL_RATE, -1, 1) * (moveInput ? 1 : 0.45)
+      ? THREE.MathUtils.clamp(turnSpeed / LEAN_FULL_RATE, -1, 1) * (moving ? 1 : 0.45)
       : 0
     leanAmount.current = THREE.MathUtils.damp(
       leanAmount.current,
@@ -264,7 +264,7 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
       // Полный цикл шага — на дистанцию двух шагов.
       phase.current += (horizontalSpeed / (STRIDE_LENGTH * 2)) * Math.PI * 2 * dt
 
-      const stride = THREE.MathUtils.clamp(horizontalSpeed / WALK_SPEED, 0, 1)
+      const stride = THREE.MathUtils.clamp(horizontalSpeed / t.walkSpeed, 0, 1)
       // Амплитуда растёт с ускорением: на бегу шаг шире.
       const amplitude = (0.45 + 0.35 * stride) * stride
       const swing = Math.sin(phase.current) * amplitude
@@ -281,7 +281,7 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
 
     if (lean.current) {
       // Положительный крен — наклон влево, под поворот.
-      lean.current.rotation.z = leanAmount.current * MAX_LEAN
+      lean.current.rotation.z = leanAmount.current * t.maxLean
       lean.current.rotation.x = -pitchAmount.current
     }
   })
