@@ -99,6 +99,11 @@ export interface Tuning {
    * Чем меньше — тем дольше руль держит базовую мощность на скорости.
    */
   carTurnRateFalloffK: number
+  /**
+   * Бесфрикционные шины на время езды: контакт с асфальтом гасит вращение
+   * кузова, и руль на месте доворачивает вдвое медленнее, чем задано.
+   */
+  carFrictionlessTires: boolean
 }
 
 export const TUNING: Tuning = {
@@ -134,6 +139,7 @@ export const TUNING: Tuning = {
   carTurnRateBase: 3.2,
   carTurnRateFloor: 0.7,
   carTurnRateFalloffK: 0.1,
+  carFrictionlessTires: true,
 }
 
 // Dev-хук: можно править настройки прямо в консоли браузера, без перезапуска.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
-import { CuboidCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier'
+import { CuboidCollider, RigidBody, CoefficientCombineRule, type RapierRigidBody } from '@react-three/rapier'
 import { DEFAULT_CITY, PLAYER_HEIGHT, type CityConfig } from '../world/cityConfig'
 import { generateCity, type ParkedCarDef } from '../world/cityLayout'
 import { useInputStore } from '../store/InputStore'
@@ -327,6 +327,13 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       body.setLinvel({ x: 0, y: 0, z: 0 }, true)
       body.setAngvel({ x: 0, y: 0, z: 0 }, true)
 
+      // Шины «без трения»: сцепление с асфальтом держит только код, который
+      // выставляет скорость и поворот. Иначе контакт с землёй гасит вращение
+      // кузова — на месте машина доворачивает вдвое медленнее, чем задано.
+      if (TUNING.carFrictionlessTires) {
+        body.collider(0)?.setFrictionCombineRule(CoefficientCombineRule.Min)
+      }
+
       // Камера не должна цеплять коллайдер машины — иначе она прижимается
       // к кузову и не видно, куда едешь.
       playerState.carBody = body
@@ -353,6 +360,8 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // Гасим машину.
       body.setLinvel({ x: 0, y: 0, z: 0 }, true)
       body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      // Возвращаем обычное трение — припаркованная машина должна стоять.
+      body.collider(0)?.setFrictionCombineRule(CoefficientCombineRule.Average)
       playerState.carBody = null
 
       // Возвращаем игрока у двери — со стороны бордюра.
