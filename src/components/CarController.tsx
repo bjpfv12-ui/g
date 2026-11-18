@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
-import { CuboidCollider, RigidBody, CoefficientCombineRule, type RapierRigidBody } from '@react-three/rapier'
+import { CuboidCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier'
 import { DEFAULT_CITY, PLAYER_HEIGHT, type CityConfig } from '../world/cityConfig'
 import { generateCity, type ParkedCarDef } from '../world/cityLayout'
 import { useInputStore } from '../store/InputStore'
@@ -15,20 +15,8 @@ const INTERACT_RADIUS = 3
 /** Насколько машина выезжает из бордюра при выходе, м. */
 const EXIT_OFFSET = 0.75
 /**
- * Скорость, за которой передача переключается «вперёд ↔ назад», м/с.
- * Ниже этого порога ориентироваться на знак скорости нельзя: на месте и
- * при отскоке от бордюра она дребезжит, и руль дёргается вместо поворота.
- */
-const GEAR_SPEED = 2.5
-
-/**
- * Сколько секунд руль может молчать, прежде чем курс доводится кодом, с.
- * Нужно, когда контакт (бордюр, стена) гасит момент и руль «умирает».
- */
-const STUCK_UNSTICK_DELAY = 0.25
-/**
  * Минимальный шаг времени для расчётов, с. Нулевой шаг (два кадра в одной
- * миллисекунде) приводит к делению на ноль и к NaN в угловой скорости.
+ * миллисекунде) приводит к делению на ноль и к NaN в скоростях.
  */
 const MIN_DT = 1e-4
 
@@ -37,16 +25,19 @@ const UP = new THREE.Vector3(0, 1, 0)
 // Черновики для расчётов в кадре — за рулём едет только одна машина.
 const carQuaternion = new THREE.Quaternion()
 const carForward = new THREE.Vector3()
-const carSide = new THREE.Vector3()
-const carTurnQuat = new THREE.Quaternion()
-const carBodyQuat = new THREE.Quaternion()
+const carUp = new THREE.Vector3()
 
 /** Припаркованная машина с идентификатором — по нему её находит игрок. */
 interface Car extends ParkedCarDef {
   id: string
 }
 
-/** Dev-хук: состояние вождения — видно из консоли без отладчика. */
+/**
+ * Dev-хук: состояние вождения — видно из консоли без отладчика.
+ *
+ * Имена полей `steer.*` и `trace` сохранены от прежней импульсной реализации:
+ * на них завязаны диагностические скрипты в `scripts/`.
+ */
 const carDebug = {
   isDriving: false,
   currentCarId: null as string | null,
@@ -54,20 +45,24 @@ const carDebug = {
   throttle: 0,
   /** Позиции припаркованных машин — удобно для отладки и автотестов. */
   parked: [] as { x: number; z: number }[],
-  /** Внутренние значения руля: цель, факт и ограничения. */
+  /** Руль: цель, факт и ограничения. */
   steer: {
+    /** Целевая скорость поворота кузова, рад/с. */
     target: 0,
+    /** Фактическая угловая скорость кузова, рад/с. */
     actual: 0,
+    /** Предел скорости поворота на текущей скорости, рад/с. */
     limit: 0,
+    /** Остаток полномочий руля: 1 — едем медленно, 0 — на максимуме. */
     authority: 0,
-    /** Направление руля: 1 — вперёд, -1 — назад. */
+    /** Направление скорости: 1 — вперёд, -1 — назад. */
     direction: 1,
-    /** Крутящий момент, который прикладывается к кузову, Н·м. */
+    /** Момент к телу больше не прикладывается — оставлено для скриптов. */
     turnForce: 0,
-    /** Сколько раз курс пришлось доводить кодом — руль не смог провернуть кузов. */
+    /** Аварийных доворотов больше нет — оставлено для скриптов. */
     unstuck: 0,
   },
-  /** Сырая угловая скорость тела из Rapier — для проверки, что вращение не сбрасывается. */
+  /** Сырая угловая скорость тела из Rapier. */
   angvel: { x: 0, y: 0, z: 0 },
   /** Тело и габариты текущей машины — для автотестов и замеров. */
   body: null as RapierRigidBody | null,
@@ -81,7 +76,7 @@ const carDebug = {
     forwardSpeed: number
     target: number
     yaw: number
-    torque: number
+    turnForce: number
     angvel: number
   }[],
   traceOn: false,
@@ -114,7 +109,7 @@ function mergeParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 
     for (let i = 0; i < p.count; i++) {
       position.push(p.getX(i), p.getY(i), p.getZ(i))
-      normal.push(n.getX(i), n.getY(i), n.getZ(i))
+      normal.push(p.getX(i), p.getY(i), p.getZ(i))
       if (t) uv.push(t.getX(i), t.getY(i))
       color.push(c.getX(i), c.getY(i), c.getZ(i))
     }
@@ -210,15 +205,18 @@ function ParkedCar({
       type="dynamic"
       position={def.position}
       rotation={[0, def.yaw, 0]}
-      // Вращение разрешено только вокруг вертикальной оси Y: руль крутит
-      // кузов, а наклон и переворот (X/Z) физике не нужны — так машина
-      // не заваливается на бок и не переворачивается на бордюре.
+      // Вращение разрешено только вокруг вертикальной оси Y. Это эквивалент
+      // `lockRotations: { x: true, z: true }` в API @react-three/rapier:
+      // кузов никогда не заваливается на бок и не переворачивается на бордюре,
+      // а руль по-прежнему доворачивает машину.
       enabledRotations={[false, true, false]}
       linearDamping={0.25}
       angularDamping={0.5}
       friction={0.9}
       restitution={0}
     >
+      {/* Нулевое трение шин: скорость машины задаёт код, а не контакт с
+          асфальтом. Иначе коллайдер днища гасит поворот. */}
       <CuboidCollider
         args={[def.width / 2, def.height / 2, def.length / 2]}
         friction={0}
@@ -249,6 +247,15 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
     setRespawn((prev) => ({ ...prev, [index]: (prev[index] ?? 0) + 1 }))
   }, [])
 
+  /**
+   * Текущая скорость машины вдоль её курса, м/с (со знаком).
+   *
+   * Живёт в коде, а не в физике: газ и тормоз плавно меняют её, а телу
+   * каждый кадр выставляется готовая скорость. Так руль работает всегда —
+   * его не может «съесть» контакт с асфальтом.
+   */
+  const driveSpeed = useRef(0)
+
   // Аварийное восстановление. Если тело физики испорчено (NaN в скоростях),
   // Rapier падает прямо на шаге физики — до блока руля кадр не доходит, и
   // обычный try/catch не помогает. Ловим ошибку на уровне окна и пересоздаём
@@ -272,19 +279,6 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
     window.addEventListener('error', onError)
     return () => window.removeEventListener('error', onError)
   }, [indexById, respawnCar])
-  /** Направление руля: 1 — вперёд, -1 — назад. Меняется с запасом по скорости. */
-  const steerDirection = useRef(1)
-
-  /** Сколько секунд руль не может провернуть кузов (мешает контакт). */
-  const stuckTimer = useRef(0)
-  /** До какого момента (мс) печатаем angVel в консоль — 1 с после нажатия A/D. */
-  const steerLogUntil = useRef(0)
-  /** Предыдущее положение руля — чтобы поймать новое нажатие. */
-  const prevSteer = useRef(0)
-  /** С какого момента руль не отвечает (для сторожа в консоли). */
-  const deadSteerSince = useRef<number | null>(null)
-  /** Сообщение о мёртвом руле уже напечатано — повторяем не каждый кадр. */
-  const deadSteerReported = useRef(false)
 
   const setCarPrompt = useUiStore((state) => state.setCarPrompt)
 
@@ -329,15 +323,9 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       useCarStore.getState().enterCar(car.id)
       playerState.driving = true
 
+      driveSpeed.current = 0
       body.setLinvel({ x: 0, y: 0, z: 0 }, true)
       body.setAngvel({ x: 0, y: 0, z: 0 }, true)
-
-      // Шины «без трения»: сцепление с асфальтом держит только код (импульс
-      // GRIP). Плоское днище кузова иначе упирается в асфальт, и руль
-      // физически не может провернуть машину — она словно на рельсах.
-      if (TUNING.carFrictionlessTires) {
-        body.collider(0)?.setFrictionCombineRule(CoefficientCombineRule.Min)
-      }
 
       // Камера не должна цеплять коллайдер машины — иначе она прижимается
       // к кузову и не видно, куда едешь.
@@ -358,13 +346,13 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       useCarStore.getState().exitCar()
       playerState.driving = false
 
+      driveSpeed.current = 0
+
       if (!body || !def) return
 
       // Гасим машину.
       body.setLinvel({ x: 0, y: 0, z: 0 }, true)
       body.setAngvel({ x: 0, y: 0, z: 0 }, true)
-      // Возвращаем обычное трение — припаркованная машина должна стоять.
-      body.collider(0)?.setFrictionCombineRule(CoefficientCombineRule.Average)
       playerState.carBody = null
 
       // Возвращаем игрока у двери — со стороны бордюра.
@@ -384,6 +372,18 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   )
 
   // ─── Шаг 3: управление машиной ───────────────────────────────────────────
+  /**
+   * Аркадное управление. Сил к телу не применяется — только прямое
+   * выставление скорости:
+   *
+   * - W/S меняют целевую скорость вдоль курса кузова, скорость подтягивается
+   *   к цели экспоненциально (плавный разгон и торможение);
+   * - A/D выставляют угловую скорость вокруг Y: чем медленнее едет машина,
+   *   тем резче руль;
+   * - Space — мгновенный стоп.
+   *
+   * Вращение вокруг X и Z заблокировано на теле, так что машина не валится.
+   */
   const drive = useCallback(
     (index: number, dt: number) => {
       const body = bodies.current[index]
@@ -395,9 +395,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       carDebug.body = body
 
       // Время шага никогда не должно быть нулём: два кадра в одной
-      // миллисекунде дают dt = 0, а деление на ноль превращает момент в NaN.
-      // Испорченная угловая скорость (NaN) остаётся в теле навсегда: руль
-      // перестаёт работать, а езда по прямой продолжается.
+      // миллисекунде дают dt = 0, а деление на ноль превращает скорость в NaN.
       const sdt = Math.max(dt, MIN_DT)
 
       const input = useInputStore.getState()
@@ -407,12 +405,10 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       // после этого перестаёт отдавать состояние и бросает исключение на
       // каждом обращении. Ловим это и пересоздаём кузов — иначе управление
       // пропало бы навсегда.
-      let mass = 0
       let velocity: { x: number; y: number; z: number }
       let angular: { x: number; y: number; z: number }
       let rot: { x: number; y: number; z: number; w: number }
       try {
-        mass = body.mass()
         velocity = body.linvel()
         angular = body.angvel()
         rot = body.rotation()
@@ -425,9 +421,12 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         return
       }
 
-      // Угловая скорость должна быть числом: иначе она «залипает» в теле
-      // и руль перестаёт работать навсегда.
+      // Испорченные скорости остаются в теле навсегда — сбрасываем и
+      // пересоздаём кузов, иначе руль пропадает навсегда.
       if (
+        !Number.isFinite(velocity.x) ||
+        !Number.isFinite(velocity.y) ||
+        !Number.isFinite(velocity.z) ||
         !Number.isFinite(angular.x) ||
         !Number.isFinite(angular.y) ||
         !Number.isFinite(angular.z)
@@ -435,9 +434,9 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         try {
           body.setAngvel({ x: 0, y: 0, z: 0 }, true)
         } catch {
-          respawnCar(index)
+          /* тело мертво — ниже пересоздаём */
         }
-        stuckTimer.current = 0
+        respawnCar(index)
         return
       }
 
@@ -448,15 +447,8 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       carForward.y = 0
       if (carForward.lengthSq() < 1e-6) carForward.set(0, 0, 1)
       carForward.normalize()
-      // Боковое направление: forward × up.
-      carSide.crossVectors(carForward, UP).normalize()
 
-      const forward = carForward
-      const side = carSide
-
-      const forwardSpeed = velocity.x * forward.x + velocity.z * forward.z
-      const sideSpeed = velocity.x * side.x + velocity.z * side.z
-
+      // ─── Ввод ──────────────────────────────────────────────────────────────
       let throttle = 0
       if (keys['KeyW'] || keys['ArrowUp']) throttle += 1
       if (keys['KeyS'] || keys['ArrowDown']) throttle -= 1
@@ -467,213 +459,96 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
 
       const braking = !!keys['Space']
 
-      // ─── Газ / задний ход ─────────────────────────────────────────────────
-      // Тяну импульсом так, чтобы продольная скорость подтягивалась к целевой:
-      // так машина гарантированно трогается, даже если сцепление подъедает
-      // часть усилия. Боковой компонент скорости трогать нельзя — его гасит
-      // сцепление ниже, иначе машину будет разворачивать на месте.
-      if (throttle !== 0 && !braking) {
-        const accel = throttle > 0 ? TUNING.carEngineAccel : TUNING.carReverseAccel
-        const desired = THREE.MathUtils.clamp(
-          forwardSpeed + throttle * accel * sdt,
-          -TUNING.carMaxReverseSpeed,
-          TUNING.carMaxSpeed,
-        )
-        const impulse = (desired - forwardSpeed) * mass
-        body.applyImpulse(
-          { x: forward.x * impulse, y: 0, z: forward.z * impulse },
-          true,
-        )
-      }
-
-      // ─── Сцепление: скорость доворачивается за кузовом ─────────────────────
-      // Важно: величина скорости при этом сохраняется. Раньше боковое
-      // скольжение просто гасилось импульсом, и при резком повороте (кузов
-      // успевает провернуться быстрее, чем траектория) весь ход съедался —
-      // машина тормозила до нуля прямо в повороте и дальше крутилась волчком.
-      // Теперь импульс поворачивает вектор скорости к курсу кузова, а её
-      // модуль почти не меняется.
-      const speedNow = Math.hypot(velocity.x, velocity.z)
-      if (speedNow > 0.05) {
-        const follow = 1 - Math.exp(-TUNING.carGrip * sdt)
-        // Угол скольжения: насколько скорость отстаёт от курса кузова.
-        const slip = Math.abs(Math.asin(THREE.MathUtils.clamp(sideSpeed / speedNow, -1, 1)))
-        // В заносе машина всё же слегка теряет ход.
-        const drag = Math.max(0, 1 - TUNING.carTurnDrag * slip * sdt)
-        const wantX = forward.x * speedNow * drag
-        const wantZ = forward.z * speedNow * drag
-        const nextX = velocity.x + (wantX - velocity.x) * follow
-        const nextZ = velocity.z + (wantZ - velocity.z) * follow
-        body.applyImpulse(
-          { x: (nextX - velocity.x) * mass, y: 0, z: (nextZ - velocity.z) * mass },
-          true,
-        )
-      }
-
-      // ─── Тормоз: гасим поступательную скорость ────────────────────────────
-      // Тормоз сбрасывает скорость ДО блока руля: setAngvel в руле перезапишет
-      // угловую скорость, и тормоз погасил бы поворот, отобрав руль у водителя.
-      const brakeFactor = Math.max(0, 1 - TUNING.carBrake * sdt)
+      // ─── Скорость ──────────────────────────────────────────────────────────
+      // Скорость живёт в коде: газ и тормоз плавно ведут её к цели, а телу
+      // выставляется готовая скорость строго вдоль курса кузова.
+      let turnRate = 0
       if (braking) {
-        const speed = Math.hypot(velocity.x, velocity.z)
-        if (speed > 0.02) {
-          body.setLinvel(
-            { x: velocity.x * brakeFactor, y: velocity.y, z: velocity.z * brakeFactor },
-            true,
-          )
-        }
-      }
-
-      // ─── Руль ─────────────────────────────────────────────────────────────
-      // Полномочия руля падают с ростом скорости: на месте машина
-      // доворачивает сильнее всего, на скорости — слабее всего.
-      const authority = THREE.MathUtils.clamp(
-        1 - Math.abs(forwardSpeed) / TUNING.carSteerFalloffSpeed,
-        TUNING.carMinSteerAuthority,
-        1,
-      )
-
-      // Передача: 1 — вперёд, -1 — назад. Задаётся ТОЛЬКО газом. Ориентироваться
-      // на знак скорости нельзя: в заносе и при развороте скорость относительно
-      // кузова меняет знак, и рулём начинает крутить в другую сторону — машина
-      // едет, а руль «не реагирует». Задний ход включается, когда машина уже
-      // едет назад или стоит: S на скорости не должен переворачивать руль.
-      if (throttle > 0) {
-        steerDirection.current = 1
-      } else if (throttle < 0 && forwardSpeed < GEAR_SPEED) {
-        steerDirection.current = -1
-      }
-      const direction = steerDirection.current
-
-      // Целевая скорость поворота кузова, рад/с.
-      const targetYawRate = steer * direction * TUNING.carMaxYawRate * authority
-
-      // Гасим остаточное вращение и обнуляем боковые оси X/Z — кузов не
-      // заваливается на бок. Множитель задан на 60 кадров в секунду.
-      // Под тормозом гашение сильнее: машина выпрямляется, но руль при этом
-      // продолжает работать.
-      const dampFactor = Math.pow(TUNING.carYawDamping, sdt * 60)
-      const damped = angular.y * dampFactor * (braking ? brakeFactor : 1)
-
-      // К цели идём сглаженно: carSteerResponse задаёт, как быстро руль
-      // набирает полномочия. Инерция берётся из габаритов кузова.
-      const inertia = (mass * (def.width * def.width + def.length * def.length)) / 12
-      const step = Math.min(1, TUNING.carSteerResponse * sdt)
-      // Гашение съедает часть скорости поворота, поэтому целевую запрашиваем
-      // с запасом — иначе фактическая скорость была бы ниже заданной.
-      const compensation = (1 - dampFactor + step * dampFactor) / step
-      const requested = targetYawRate * compensation
-      const nextYawRate = damped + (requested - damped) * step
-
-      // Момент подбираем так, чтобы за шаг скорость вращения дошла до
-      // nextYawRate: импульс = Δω · инерция.
-      const turnForce = ((nextYawRate - damped) * inertia) / sdt
-
-      // Порядок важен! applyTorqueImpulse меняет angvel сразу, а setAngvel
-      // перезаписывает его — если сначала крутим, а потом гасим, импульс
-      // теряется и руль не работает вовсе.
-      body.setAngvel({ x: 0, y: damped, z: 0 }, true)
-      body.applyTorqueImpulse({ x: 0, y: turnForce * sdt, z: 0 }, true)
-
-      // ─── Аварийный доворот ────────────────────────────────────────────────
-      // Физика иногда не даёт провернуть кузов: колесо в бордюре, нос в стене,
-      // угол здания. Тогда момент гасится контактом, руль «умирает», и машина
-      // не реагирует на A/D. Если так держится дольше STUCK_UNSTICK_DELAY,
-      // доводим курс кодом — поворот происходит в любом случае.
-      const targetAbs = Math.abs(targetYawRate)
-      if (targetAbs > 0.5 && targetAbs - Math.abs(angular.y) > targetAbs * 0.6) {
-        stuckTimer.current += sdt
+        // Мгновенный стоп: и поступательная, и угловая скорость обнуляются.
+        driveSpeed.current = 0
+        body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+        body.setAngvel({ x: 0, y: 0, z: 0 }, true)
       } else {
-        stuckTimer.current = 0
-      }
-      if (stuckTimer.current > STUCK_UNSTICK_DELAY) {
-        const turn = carTurnQuat.setFromAxisAngle(UP, (targetYawRate - angular.y) * sdt)
-        const cur = body.rotation()
-        carBodyQuat.set(cur.x, cur.y, cur.z, cur.w)
-        carBodyQuat.premultiply(turn)
-        body.setRotation(
-          { x: carBodyQuat.x, y: carBodyQuat.y, z: carBodyQuat.z, w: carBodyQuat.w },
+        const current = driveSpeed.current
+        let target: number
+        let rate: number
+        if (throttle > 0) {
+          target = TUNING.carMaxSpeed
+          // Если едем назад — газ сначала тормозит, и только потом разгоняет.
+          rate = current < -0.1 ? TUNING.carBrakeRate : TUNING.carAccelRate
+        } else if (throttle < 0) {
+          target = -TUNING.carMaxReverseSpeed
+          // Если едем вперёд — S тормозит, а не разворачивает машину сразу.
+          rate = current > 0.1 ? TUNING.carBrakeRate : TUNING.carReverseAccelRate
+        } else {
+          // Ничего не нажато — машина катится накатом и плавно тормозит.
+          target = 0
+          rate = TUNING.carCoastRate
+        }
+
+        // Плавное движение к цели: экспоненциальное сглаживание.
+        const next = current + (target - current) * (1 - Math.exp(-rate * sdt))
+        driveSpeed.current = Math.abs(next) < 0.01 ? 0 : next
+
+        body.setLinvel(
+          {
+            x: carForward.x * driveSpeed.current,
+            y: velocity.y,
+            z: carForward.z * driveSpeed.current,
+          },
           true,
         )
-        body.setAngvel({ x: 0, y: targetYawRate, z: 0 }, true)
-        carDebug.steer.unstuck++
+
+        // ─── Руль ──────────────────────────────────────────────────────────
+        // Угловая скорость ставится напрямую: руль работает всегда, его не
+        // может «съесть» ни трение, ни контакт с бордюром. Чем медленнее едет
+        // машина, тем резче поворот — на месте руль крутит сильнее всего.
+        const speedFactor = THREE.MathUtils.clamp(
+          Math.abs(driveSpeed.current) / TUNING.carMaxSpeed,
+          0,
+          1,
+        )
+        turnRate = THREE.MathUtils.lerp(
+          TUNING.carTurnRateIdle,
+          TUNING.carTurnRateFast,
+          speedFactor,
+        )
+        body.setAngvel({ x: 0, y: -steer * turnRate, z: 0 }, true)
+      }
+
+      // Фактическая угловая скорость после выставления — для телеметрии.
+      let actualYawRate = 0
+      try {
+        const av = body.angvel()
+        actualYawRate = av.y
+        carDebug.angvel.x = av.x
+        carDebug.angvel.y = av.y
+        carDebug.angvel.z = av.z
+      } catch {
+        actualYawRate = 0
       }
 
       if (import.meta.env.DEV) {
-        carDebug.steer.target = targetYawRate
-        carDebug.steer.actual = angular.y
-        carDebug.steer.limit = TUNING.carMaxYawRate
-        carDebug.steer.authority = authority
-        carDebug.steer.direction = direction
-        carDebug.steer.turnForce = turnForce
-        carDebug.angvel.x = angular.x
-        carDebug.angvel.y = angular.y
-        carDebug.angvel.z = angular.z
-      }
-
-      // ─── Сторож руля: если рулём нельзя провернуть кузов — говорим почему ──
-      if (import.meta.env.DEV) {
-        const now = performance.now()
-        const pressed = steer !== 0 && prevSteer.current === 0
-        prevSteer.current = steer
-        // Лог живёт ровно секунду от нажатия, а не до отпускания.
-        if (pressed) steerLogUntil.current = now + 1000
-        if (steer !== 0 && now < steerLogUntil.current) {
-          const av = body.angvel()
-          console.log(
-            `[car] angVel: x=${av.x.toFixed(3)} y=${av.y.toFixed(3)} z=${av.z.toFixed(3)} | ` +
-              `цель ${targetYawRate.toFixed(3)} рад/с | направление ${direction} | ` +
-              `полномочия ${authority.toFixed(2)}`,
-          )
-        }
-
-        // Руль не отвечает: цель есть, а кузов не крутится дольше полусекунды.
-        if (Math.abs(targetYawRate) > 0.5 && Math.abs(angular.y) < 0.2) {
-          deadSteerSince.current ??= now
-          if (now - deadSteerSince.current > 500 && !deadSteerReported.current) {
-            deadSteerReported.current = true
-            console.warn(
-              '[car] РУЛЬ НЕ РАБОТАЕТ: цель',
-              targetYawRate.toFixed(3),
-              'рад/с, факт',
-              angular.y.toFixed(3),
-              '| тормоз:',
-              braking,
-              '| передача:',
-              direction,
-              '| скорость:',
-              playerState.speed.toFixed(2),
-              '| наклон up.y:',
-              playerState.carUpY.toFixed(2),
-              '| аварийных доворотов:',
-              carDebug.steer.unstuck,
-            )
-          }
-        } else {
-          deadSteerSince.current = null
-          deadSteerReported.current = false
-        }
-      }
-
-      // ─── Ограничение максимальной скорости ──────────────────────────────
-      const horizontalSpeed = Math.hypot(velocity.x, velocity.z)
-      if (horizontalSpeed > TUNING.carMaxSpeed) {
-        const scale = TUNING.carMaxSpeed / horizontalSpeed
-        body.setLinvel({ x: velocity.x * scale, y: velocity.y, z: velocity.z * scale }, true)
+        carDebug.steer.target = -steer * turnRate
+        carDebug.steer.actual = actualYawRate
+        carDebug.steer.limit = turnRate
+        carDebug.steer.authority = 1 - speedFactorOf(driveSpeed.current)
+        carDebug.steer.direction = driveSpeed.current < -0.1 ? -1 : 1
       }
 
       // ─── Камера и HUD следуют за машиной ─────────────────────────────────
       const t = body.translation()
       playerState.position.set(t.x, t.y, t.z)
-      const speed = body.linvel()
-      playerState.speed = Math.hypot(speed.x, speed.z)
+      playerState.speed = Math.abs(driveSpeed.current)
 
       // Курс машины — камера по нему возвращается за кузов.
-      playerState.carYaw = Math.atan2(forward.x, forward.z)
-      playerState.carForwardSpeed = forwardSpeed
-      playerState.carYawRate = angular.y
+      playerState.carYaw = Math.atan2(carForward.x, carForward.z)
+      playerState.carForward.copy(carForward)
+      playerState.carForwardSpeed = driveSpeed.current
+      playerState.carYawRate = actualYawRate
       // Насколько кузов перевёрнут: «вверх» машины в мировых координатах.
-      playerState.carUpY = UP.clone().applyQuaternion(carQuaternion).y
+      carUp.copy(UP).applyQuaternion(carQuaternion)
+      playerState.carUpY = carUp.y
 
       carDebug.speed = playerState.speed
       carDebug.throttle = throttle
@@ -686,11 +561,11 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         carDebug.trace.push({
           t: performance.now(),
           steer,
-          forwardSpeed,
-          target: targetYawRate,
+          forwardSpeed: driveSpeed.current,
+          target: -steer * turnRate,
           yaw: playerState.carYaw,
-          torque: turnForce,
-          angvel: angular.y,
+          turnForce: 0,
+          angvel: actualYawRate,
         })
         if (carDebug.trace.length > 4000) carDebug.trace.shift()
       }
@@ -767,4 +642,9 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       ))}
     </group>
   )
+}
+
+/** Доля потери полномочий руля: 0 — машина едет медленно, 1 — на максимуме. */
+function speedFactorOf(speed: number): number {
+  return THREE.MathUtils.clamp(Math.abs(speed) / TUNING.carMaxSpeed, 0, 1)
 }
