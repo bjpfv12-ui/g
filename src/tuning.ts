@@ -79,6 +79,11 @@ export interface Tuning {
   carReverseAccelRate: number
   /** Скорость сброса скорости на холостом ходу (накат), 1/с. */
   carCoastRate: number
+  /**
+   * Скорость подстройки команды под фактическую скорость при контакте
+   * с препятствием, 1/с. Без неё машина давит в стену на полной мощности.
+   */
+  carBlockRate: number
   /** Предел скорости поворота кузова на месте, рад/с. */
   carTurnRateIdle: number
   /** Предел скорости поворота кузова на максимальной скорости, рад/с. */
@@ -114,6 +119,7 @@ export const TUNING: Tuning = {
   carBrakeRate: 3.2,
   carReverseAccelRate: 1.4,
   carCoastRate: 1.6,
+  carBlockRate: 6,
   carTurnRateIdle: 3.2,
   carTurnRateFast: 0.9,
 }

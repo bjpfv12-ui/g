@@ -487,7 +487,17 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         }
 
         // Плавное движение к цели: экспоненциальное сглаживание.
-        const next = current + (target - current) * (1 - Math.exp(-rate * sdt))
+        let next = current + (target - current) * (1 - Math.exp(-rate * sdt))
+
+        // Препятствие: физика гасит скорость о стену, а команда продолжает
+        // давить машину в стену на полной скорости. Если фактическая
+        // скорость сильно ниже заданной — машина упирается: подстраиваем
+        // команду под факт, иначе спидометр врёт и машина стоит в стене.
+        const actualSpeed = Math.hypot(velocity.x, velocity.z)
+        if (next > 2 && actualSpeed < next * 0.4) {
+          next += (actualSpeed - next) * (1 - Math.exp(-TUNING.carBlockRate * sdt))
+        }
+
         driveSpeed.current = Math.abs(next) < 0.01 ? 0 : next
 
         body.setLinvel(
