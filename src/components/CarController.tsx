@@ -334,6 +334,13 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       body.setLinvel({ x: 0, y: 0, z: 0 }, true)
       body.setAngvel({ x: 0, y: 0, z: 0 }, true)
 
+      // Камера берёт положение машины из интерполяции между физическими
+      // шагами — заполняем его сразу, иначе камера прыгнет от нуля к машине.
+      const t = body.translation()
+      playerState.carPositionPrev.set(t.x, t.y, t.z)
+      playerState.carPosition.set(t.x, t.y, t.z)
+      playerState.carStepTime = performance.now()
+
       // Шины «без трения»: сцепление с асфальтом держит только код, который
       // выставляет скорость и поворот. Иначе контакт с землёй гасит вращение
       // кузова — на месте машина доворачивает вдвое медленнее, чем задано.
