@@ -511,18 +511,13 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
 
         // ─── Руль ──────────────────────────────────────────────────────────
         // Угловая скорость ставится напрямую: руль работает всегда, его не
-        // может «съесть» ни трение, ни контакт с бордюром. Чем медленнее едет
-        // машина, тем резче поворот — на месте руль крутит сильнее всего.
-        const speedFactor = THREE.MathUtils.clamp(
-          Math.abs(driveSpeed.current) / TUNING.carMaxSpeed,
-          0,
-          1,
-        )
-        turnRate = THREE.MathUtils.lerp(
-          TUNING.carTurnRateIdle,
-          TUNING.carTurnRateFast,
-          speedFactor,
-        )
+        // может «съесть» ни трение, ни контакт с бордюром.
+        //
+        // Зависимость от скорости мягкая: на месте машина крутит на полную
+        // мощность, на максимальной скорости руль держит ~80 % от неё.
+        // Разница ощутимая, но руль остаётся уверенным на любой скорости —
+        // тормозить перед поворотом не нужно.
+        turnRate = TUNING.carTurnRateBase * turnRateFactor(driveSpeed.current)
         body.setAngvel({ x: 0, y: steer * turnRate, z: 0 }, true)
       }
 
@@ -542,7 +537,8 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         carDebug.steer.target = steer * turnRate
         carDebug.steer.actual = actualYawRate
         carDebug.steer.limit = turnRate
-        carDebug.steer.authority = 1 - speedFactorOf(driveSpeed.current)
+        // Остаток полномочий руля: 1 — на месте, ~0.8 — на максимуме.
+        carDebug.steer.authority = turnRateFactor(driveSpeed.current)
         carDebug.steer.direction = driveSpeed.current < -0.1 ? -1 : 1
       }
 
@@ -654,7 +650,14 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   )
 }
 
-/** Доля потери полномочий руля: 0 — машина едет медленно, 1 — на максимуме. */
-function speedFactorOf(speed: number): number {
-  return THREE.MathUtils.clamp(Math.abs(speed) / TUNING.carMaxSpeed, 0, 1)
+/**
+ * Множитель мощности руля в зависимости от скорости машины.
+ *
+ * Плавная кривая: на месте — полная мощность (1.0), на максимальной
+ * скорости — около 0.8. Спад мягкий, поэтому руль уверенно работает на
+ * любой скорости и тормозить перед поворотом не нужно.
+ */
+function turnRateFactor(speed: number): number {
+  const floor = TUNING.carTurnRateFloor
+  return floor + (1 - floor) / (1 + Math.abs(speed) * TUNING.carTurnRateFalloffK)
 }

@@ -84,10 +84,21 @@ export interface Tuning {
    * с препятствием, 1/с. Без неё машина давит в стену на полной мощности.
    */
   carBlockRate: number
-  /** Предел скорости поворота кузова на месте, рад/с. */
-  carTurnRateIdle: number
-  /** Предел скорости поворота кузова на максимальной скорости, рад/с. */
-  carTurnRateFast: number
+  /**
+   * Базовая скорость поворота кузова, рад/с. Это полная мощность руля —
+   * на месте, на холостом ходу.
+   */
+  carTurnRateBase: number
+  /**
+   * Минимальная доля мощности руля на максимальной скорости.
+   * 0.7 — на полной скорости руль держит 70 % от базовой.
+   */
+  carTurnRateFloor: number
+  /**
+   * Мягкость спада мощности руля по скорости, 1/(м/с).
+   * Чем меньше — тем дольше руль держит базовую мощность на скорости.
+   */
+  carTurnRateFalloffK: number
 }
 
 export const TUNING: Tuning = {
@@ -120,8 +131,9 @@ export const TUNING: Tuning = {
   carReverseAccelRate: 1.4,
   carCoastRate: 1.6,
   carBlockRate: 6,
-  carTurnRateIdle: 3.2,
-  carTurnRateFast: 0.9,
+  carTurnRateBase: 3.2,
+  carTurnRateFloor: 0.7,
+  carTurnRateFalloffK: 0.1,
 }
 
 // Dev-хук: можно править настройки прямо в консоли браузера, без перезапуска.
