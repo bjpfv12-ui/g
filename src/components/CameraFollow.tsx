@@ -25,20 +25,27 @@ const PROBE_RADIUS = 0.45
 const FOLLOW_LAMBDA = 12
 /** Насколько резко камера доворачивает взгляд на игрока. */
 const LOOK_LAMBDA = 18
+
+// ─── Камера за рулём: GTA-стиль ──────────────────────────────────────────────
+/** Расстояние от машины до камеры по «пружине», м. */
+const CAR_DISTANCE = 6
+/** Высота камеры над машиной, м. */
+const CAR_HEIGHT = 3
 /**
- * Камера возвращается за кузов только пока машина поворачивает: иначе
- * автоповорот перебивал бы мышь и игрок не мог бы осмотреться.
- *
- * Догоняет не мгновенно — с задержкой, поэтому в повороте кузов видно
- * сбоку, как в GTA, а не запертым прямо по курсу.
+ * Наклон камеры, соответствующий высоте CAR_HEIGHT на расстоянии
+ * CAR_DISTANCE: sin(pitch)·distance = CAR_HEIGHT.
  */
-const CAR_ALIGN_MOUSE_IDLE = 0.25
-/** Насколько плавно камера догоняет курс машины, 1/с. */
-const CAR_ALIGN_RATE = 2.6
-/** Минимальная скорость машины, с которой камера возвращается за кузов, м/с. */
-const CAR_ALIGN_SPEED = 1.5
-/** Порог «машина поворачивает», рад/с. */
-const CAR_TURN_RATE = 0.12
+const CAR_PITCH = Math.asin(CAR_HEIGHT / CAR_DISTANCE)
+/** Насколько быстро камера доворачивает за машину, 1/с. */
+const CAR_ALIGN_RATE = 9
+/** Сколько секунд без движения мыши камера возвращается за машину, с. */
+const CAR_ALIGN_DELAY = 0.5
+/** Точка взгляда смещена вперёд по курсу машины, м. */
+const CAR_LOOKAHEAD = 2
+/** Высота точки взгляда над центром машины, м. */
+const CAR_LOOK_HEIGHT = 1.2
+/** Поле зрения на максимальной скорости. */
+const CAR_FOV_FAST = 78
 
 /** Разница углов по кратчайшей дуге, от -π до π. */
 function angleDiff(target: number, current: number): number {
@@ -66,6 +73,7 @@ const PROBES: Array<[number, number]> = [
 ]
 
 const target = new THREE.Vector3()
+const lookPoint = new THREE.Vector3()
 const desired = new THREE.Vector3()
 const offset = new THREE.Vector3()
 const direction = new THREE.Vector3()
@@ -80,6 +88,8 @@ export function CameraFollow() {
   const lookTarget = useRef(new THREE.Vector3(0, 1.5, 0))
   /** Сколько секунд прошло с последнего движения мыши. */
   const mouseIdle = useRef(0)
+  /** Были ли мы за рулём в прошлом кадре — для отслеживания посадки. */
+  const wasDriving = useRef(false)
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 1 / 30)
@@ -127,33 +137,56 @@ export function CameraFollow() {
       }
     }
 
-    // ─── Камера возвращается за машину ───────────────────────────────────────
-    // Действует только пока машина реально поворачивает: тогда машина не
-    // уезжает вбок из поля зрения. Мышь при этом всегда главнее — стоит
-    // игроку дёрнуть мышь, автоповорот отпускает камеру.
-    if (
-      playerState.driving &&
-      playerState.carForwardSpeed > CAR_ALIGN_SPEED &&
-      Math.abs(playerState.carYawRate) > CAR_TURN_RATE &&
-      mouseIdle.current > CAR_ALIGN_MOUSE_IDLE
-    ) {
-      // При yaw = 0 камера смотрит в -Z, а машина едет локальной осью +Z —
-      // значит целевой yaw на π больше курса машины.
-      const targetYaw = playerState.carYaw + Math.PI
-      const store = useCameraStore.getState()
-      store.setYaw(lerpAngle(store.yaw, targetYaw, 1 - Math.exp(-CAR_ALIGN_RATE * dt)))
+    // ─── Камера за рулём: авто-следование за машиной ─────────────────────────
+    // Камера стоит на «пружине» позади машины и плавно доворачивает за её
+    // курсом. Мышь временно перехватывает управление, но через полсекунды
+    // без движения мыши камера сама возвращается в идеальное положение.
+    const driving = playerState.driving
+    if (driving) {
+      if (!wasDriving.current) {
+        // Только что сели — ставим камеру за машину сразу, без рывка.
+        wasDriving.current = true
+        const store = useCameraStore.getState()
+        store.setYaw(playerState.carYaw + Math.PI)
+        store.setPitch(CAR_PITCH)
+        mouseIdle.current = CAR_ALIGN_DELAY + 0.1
+      }
+
+      if (mouseIdle.current > CAR_ALIGN_DELAY) {
+        const store = useCameraStore.getState()
+        const t = 1 - Math.exp(-CAR_ALIGN_RATE * dt)
+        // При yaw = 0 камера смотрит в -Z, а машина едет локальной осью +Z —
+        // значит целевой yaw на π больше курса машины.
+        store.setYaw(lerpAngle(store.yaw, playerState.carYaw + Math.PI, t))
+        store.setPitch(THREE.MathUtils.lerp(store.pitch, CAR_PITCH, t))
+      }
+    } else {
+      wasDriving.current = false
     }
 
     const yaw = useCameraStore.getState().yaw
     const pitch = useCameraStore.getState().pitch
-    const distance = useCameraStore.getState().distance
+    const distance = driving ? CAR_DISTANCE : useCameraStore.getState().distance
 
-    // ─── Цель — чуть выше головы ─────────────────────────────────────────────
-    target.set(
-      playerState.position.x,
-      playerState.position.y + HEIGHT_OFFSET,
-      playerState.position.z,
-    )
+    if (driving) {
+      // Ось «пружины» — центр машины. Камера висит на 6 м позади и 3 м выше.
+      target.copy(playerState.position)
+
+      // Взгляд — не строго в корму: точка смещена вперёд по курсу машины,
+      // поэтому дорога видна заранее, а машина сидит в кадре по центру снизу.
+      lookPoint
+        .copy(playerState.position)
+        .addScaledVector(playerState.carForward, CAR_LOOKAHEAD)
+      lookPoint.y = playerState.position.y + CAR_LOOK_HEIGHT
+    } else {
+      // ─── Цель — чуть выше головы ───────────────────────────────────────────
+      target.set(
+        playerState.position.x,
+        playerState.position.y + HEIGHT_OFFSET,
+        playerState.position.z,
+      )
+      lookPoint.copy(target)
+    }
 
     const cosPitch = Math.cos(pitch)
     offset.set(
@@ -163,9 +196,10 @@ export function CameraFollow() {
     )
     offset.multiplyScalar(distance)
 
-    // Лёгкий сдвиг камеры вбок — «через плечо», как в GTA.
-    right.set(Math.cos(yaw), 0, -Math.sin(yaw)).multiplyScalar(SHOULDER_OFFSET)
-    desired.copy(target).add(offset).add(right)
+    // Лёгкий сдвиг камеры вбок — «через плечо», как в GTA. За рулём сдвиг
+    // убран: машина должна оставаться в центре кадра.
+    right.set(Math.cos(yaw), 0, -Math.sin(yaw))
+    desired.copy(target).add(offset).addScaledVector(right, driving ? 0 : SHOULDER_OFFSET)
 
     // ─── Коллизия камеры со стенами ───────────────────────────────────────────
     direction.copy(desired).sub(target)
@@ -173,8 +207,9 @@ export function CameraFollow() {
     if (fullDistance > 0.001) {
       direction.divideScalar(fullDistance)
       // Перпендикуляр к направлению взгляда — для смещения проб.
-      up.copy(direction).cross(right).normalize()
-      if (!Number.isFinite(up.x)) up.set(0, 1, 0)
+      up.copy(direction).cross(right)
+      if (up.lengthSq() < 1e-6) up.set(0, 1, 0)
+      else up.normalize()
 
       // Из нескольких лучей берём самый короткий свободный отрезок.
       let allowed = 1
@@ -218,12 +253,17 @@ export function CameraFollow() {
 
     // ─── Сглаживание ─────────────────────────────────────────────────────────
     camera.position.lerp(desired, 1 - Math.exp(-FOLLOW_LAMBDA * dt))
-    lookTarget.current.lerp(target, 1 - Math.exp(-LOOK_LAMBDA * dt))
+    lookTarget.current.lerp(lookPoint, 1 - Math.exp(-LOOK_LAMBDA * dt))
     camera.lookAt(lookTarget.current)
 
-    // Лёгкое расширение поля зрения на бегу — ощущение скорости.
-    const sprinting = playerState.speed > 7.5
-    const targetFov = sprinting ? SPRINT_FOV : BASE_FOV
+    // Поле зрения: на бегу чуть шире, за рулём — шире с ростом скорости.
+    let targetFov = BASE_FOV
+    if (driving) {
+      const fast = THREE.MathUtils.clamp(playerState.speed / TUNING.carMaxSpeed, 0, 1)
+      targetFov = THREE.MathUtils.lerp(BASE_FOV, CAR_FOV_FAST, fast)
+    } else if (playerState.speed > 7.5) {
+      targetFov = SPRINT_FOV
+    }
     if (Math.abs(camera.fov - targetFov) > 0.05) {
       camera.fov = THREE.MathUtils.damp(camera.fov, targetFov, 4, dt)
       camera.updateProjectionMatrix()

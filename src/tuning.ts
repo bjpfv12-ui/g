@@ -113,7 +113,7 @@ export const TUNING: Tuning = {
   carAccelRate: 1.7,
   carBrakeRate: 3.2,
   carReverseAccelRate: 1.4,
-  carCoastRate: 1.1,
+  carCoastRate: 1.6,
   carTurnRateIdle: 3.2,
   carTurnRateFast: 0.9,
 }

@@ -12,7 +12,13 @@ export function Hud() {
   const pointerLocked = useInputStore((state) => state.pointerLocked)
   const doorPrompt = useUiStore((state) => state.doorPrompt)
   const carPrompt = useUiStore((state) => state.carPrompt)
-  const [telemetry, setTelemetry] = useState({ x: 0, z: 0, speed: 0, grounded: true })
+  const [telemetry, setTelemetry] = useState({
+    x: 0,
+    z: 0,
+    speed: 0,
+    grounded: true,
+    driving: false,
+  })
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -21,6 +27,7 @@ export function Hud() {
         z: playerState.position.z,
         speed: playerState.speed,
         grounded: playerState.grounded,
+        driving: playerState.driving,
       })
     }, 100)
     return () => window.clearInterval(timer)
@@ -49,27 +56,49 @@ export function Hud() {
       </div>
 
       <div className="hud__controls">
-        <span>
-          <b>W/S</b> движение
-        </span>
-        <span>
-          <b>A/D</b> {TUNING.controlMode === 'body' ? 'поворот' : 'шаг вбок'}
-        </span>
-        <span>
-          <b>Shift</b> бег
-        </span>
-        <span>
-          <b>Space</b> прыжок / тормоз
-        </span>
-        <span>
-          <b>E</b> дверь
-        </span>
-        <span>
-          <b>F</b> сесть / выйти
-        </span>
-        <span>
-          <b>Мышь</b> камера
-        </span>
+        {telemetry.driving ? (
+          <>
+            <span>
+              <b>W/S</b> газ / задний ход
+            </span>
+            <span>
+              <b>A/D</b> руль
+            </span>
+            <span>
+              <b>Space</b> тормоз
+            </span>
+            <span>
+              <b>F</b> выйти
+            </span>
+            <span>
+              <b>Мышь</b> осмотреться
+            </span>
+          </>
+        ) : (
+          <>
+            <span>
+              <b>W/S</b> движение
+            </span>
+            <span>
+              <b>A/D</b> {TUNING.controlMode === 'body' ? 'поворот' : 'шаг вбок'}
+            </span>
+            <span>
+              <b>Shift</b> бег
+            </span>
+            <span>
+              <b>Space</b> прыжок / тормоз
+            </span>
+            <span>
+              <b>E</b> дверь
+            </span>
+            <span>
+              <b>F</b> сесть / выйти
+            </span>
+            <span>
+              <b>Мышь</b> камера
+            </span>
+          </>
+        )}
         <span>
           <b>Esc</b> пауза
         </span>

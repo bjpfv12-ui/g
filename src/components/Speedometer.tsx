@@ -3,8 +3,10 @@ import { playerState } from '../state/playerState'
 
 /** Перевод метров в секунду в километры в час. */
 const KMH = 3.6
-/** Предел шкалы спидометра, км/ч. */
-const MAX_KMH = 180
+/** Предел шкалы спидометра пешком, км/ч. */
+const MAX_KMH_FOOT = 60
+/** Предел шкалы спидометра в машине, км/ч. */
+const MAX_KMH_CAR = 90
 
 /**
  * Спидометр в углу HUD.
@@ -23,8 +25,9 @@ export function Speedometer() {
     return () => window.clearInterval(timer)
   }, [])
 
-  const kmh = Math.min(view.speed * KMH, MAX_KMH)
-  const fill = Math.min(kmh / MAX_KMH, 1)
+  const maxKmh = view.driving ? MAX_KMH_CAR : MAX_KMH_FOOT
+  const kmh = Math.min(view.speed * KMH, maxKmh)
+  const fill = Math.min(kmh / maxKmh, 1)
 
   return (
     <div className="hud__gauge hud__gauge--speed">

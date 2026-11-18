@@ -109,7 +109,7 @@ function mergeParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 
     for (let i = 0; i < p.count; i++) {
       position.push(p.getX(i), p.getY(i), p.getZ(i))
-      normal.push(p.getX(i), p.getY(i), p.getZ(i))
+      normal.push(n.getX(i), n.getY(i), n.getZ(i))
       if (t) uv.push(t.getX(i), t.getY(i))
       color.push(c.getX(i), c.getY(i), c.getZ(i))
     }
