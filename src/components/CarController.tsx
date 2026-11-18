@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
-import { CuboidCollider, RigidBody, CoefficientCombineRule, type RapierRigidBody } from '@react-three/rapier'
+import {
+  CuboidCollider,
+  RigidBody,
+  CoefficientCombineRule,
+  useAfterPhysicsStep,
+  useBeforePhysicsStep,
+  type RapierRigidBody,
+} from '@react-three/rapier'
 import { DEFAULT_CITY, PLAYER_HEIGHT, type CityConfig } from '../world/cityConfig'
 import { generateCity, type ParkedCarDef } from '../world/cityLayout'
 import { useInputStore } from '../store/InputStore'
@@ -551,19 +558,9 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         carDebug.steer.direction = driveSpeed.current < -0.1 ? -1 : 1
       }
 
-      // ─── Камера и HUD следуют за машиной ─────────────────────────────────
-      const t = body.translation()
-      playerState.position.set(t.x, t.y, t.z)
       playerState.speed = Math.abs(driveSpeed.current)
-
-      // Курс машины — камера по нему возвращается за кузов.
-      playerState.carYaw = Math.atan2(carForward.x, carForward.z)
-      playerState.carForward.copy(carForward)
       playerState.carForwardSpeed = driveSpeed.current
       playerState.carYawRate = actualYawRate
-      // Насколько кузов перевёрнут: «вверх» машины в мировых координатах.
-      carUp.copy(UP).applyQuaternion(carQuaternion)
-      playerState.carUpY = carUp.y
 
       carDebug.speed = playerState.speed
       carDebug.throttle = throttle
