@@ -6,7 +6,6 @@ import {
   RigidBody,
   CoefficientCombineRule,
   useAfterPhysicsStep,
-  useBeforePhysicsStep,
   type RapierRigidBody,
 } from '@react-three/rapier'
 import { DEFAULT_CITY, PLAYER_HEIGHT, type CityConfig } from '../world/cityConfig'
@@ -593,26 +592,6 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
   )
 
   /**
-   * Управление машиной — строго в физическом тике.
-   *
-   * `useBeforePhysicsStep` срабатывает ровно перед тем, как Rapier считает
-   * очередной шаг, и всегда с фиксированным шагом (1/60 с), сколько бы шагов
-   * ни ушло на кадр. Команды скорости, выставленные из useFrame, приходили в
-   * произвольный момент рендер-цикла — скорость применялась на шаг позже,
-   * и машина дёргалась на глазах.
-   */
-  useBeforePhysicsStep((world) => {
-    const carState = useCarStore.getState()
-    if (!carState.isDriving || !carState.currentCarId) return
-    const index = indexById.get(carState.currentCarId)
-    if (index === undefined) return
-    // Фиксированный шаг физики. world.timestep выставляется сразу после
-    // колбэка, поэтому здесь значение предыдущего шага — оно то же самое.
-    const dt = carDebug.forceZeroDt ? 0 : world.timestep || 1 / 60
-    drive(index, dt)
-  })
-
-  /**
    * Состояние кузова — после физического шага.
    *
    * Здесь снимается положение машины на «текущем» шаге; предыдущее
@@ -659,7 +638,12 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
     playerState.carUpY = carUp.y
   })
 
-  useFrame(() => {
+  useFrame((_, delta) => {
+    // Команды скорости выставляются здесь, в рендер-цикле. Скорость, которую
+    // мы отдаём, уже сглажена (см. состояние driveSpeed ниже): она меняется
+    // плавно, без скачков между кадрами, поэтому встроенная интерполяция
+    // Rapier не спотыкается о резкие команды.
+    const dt = carDebug.forceZeroDt ? 0 : Math.min(delta, 1 / 30)
     const input = useInputStore.getState()
     const pressedF = input.consumePress('KeyF')
 
@@ -671,7 +655,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         : -1
 
     if (drivingIndex >= 0) {
-      // Само управление — в физическом тике, здесь только вход/выход.
+      drive(drivingIndex, dt)
       setCarPrompt('Нажми F, чтобы выйти')
       carDebug.isDriving = true
       carDebug.currentCarId = carState.currentCarId

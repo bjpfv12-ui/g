@@ -91,6 +91,8 @@ export function CameraFollow() {
   const mouseIdle = useRef(0)
   /** Были ли мы за рулём в прошлом кадре — для отслеживания посадки. */
   const wasDriving = useRef(false)
+  /** Длина «пружины» камеры: 1 — вся дистанция, меньше — подтянута препятствием. */
+  const pullScale = useRef(1)
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 1 / 30)
@@ -257,8 +259,16 @@ export function CameraFollow() {
       }
 
       if (allowed < 1) {
-        const safe = Math.max(MIN_DISTANCE, allowed * fullDistance)
+        // Результат пробы скачет: луч то цепляет столб, то нет. На скорости
+        // это рвёт камеру — поэтому длину пружины подтягиваем плавно.
+        const targetScale = Math.max(MIN_DISTANCE / fullDistance, allowed)
+        pullScale.current +=
+          (targetScale - pullScale.current) * (1 - Math.exp(-6 * dt))
+        const safe = Math.max(MIN_DISTANCE, pullScale.current * fullDistance)
         desired.copy(target).addScaledVector(direction, safe)
+      } else {
+        // Препятствие ушло — пружина так же плавно расправляется.
+        pullScale.current += (1 - pullScale.current) * (1 - Math.exp(-6 * dt))
       }
     }
 
