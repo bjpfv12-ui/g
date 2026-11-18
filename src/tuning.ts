@@ -63,39 +63,26 @@ export interface Tuning {
   /** Сколько секунд после касания земля считается «под ногами», с. */
   groundSticky: number
 
-  // ── Машина ────────────────────────────────────────────────────────────────
-  /** Максимальная скорость, м/с. */
+  // ── Машина: аркадное управление ───────────────────────────────────────────
+  /** Максимальная скорость вперёд, м/с. */
   carMaxSpeed: number
   /** Максимальная скорость заднего хода, м/с. */
   carMaxReverseSpeed: number
-  /** Ускорение двигателя вперёд, м/с². */
-  carEngineAccel: number
-  /** Ускорение назад, м/с². */
-  carReverseAccel: number
+  /**
+   * Скорость разгона вперёд, 1/с. Скорость подтягивается к цели
+   * экспоненциально: v += (цель − v)·(1 − e^(−k·dt)).
+   */
+  carAccelRate: number
+  /** Скорость торможения газом (S на ходу вперёд), 1/с. */
+  carBrakeRate: number
+  /** Скорость разгона назад, 1/с. */
+  carReverseAccelRate: number
+  /** Скорость сброса скорости на холостом ходу (накат), 1/с. */
+  carCoastRate: number
   /** Предел скорости поворота кузова на месте, рад/с. */
-  carMaxYawRate: number
-  /** Насколько быстро кузов доворачивается до целевой скорости поворота, 1/с. */
-  carSteerResponse: number
-  /** Скорость, на которой полномочия руля падают до минимума, м/с. */
-  carSteerFalloffSpeed: number
-  /** Минимальные полномочия руля на большой скорости. */
-  carMinSteerAuthority: number
-  /**
-   * Гашение остаточного вращения кузова за кадр (на 60 к/с).
-   * Меньше 1 — кузов не крутится волчком и не заваливается на бок.
-   */
-  carYawDamping: number
-  /** Скорость гашения бокового скольжения, 1/с. Меньше — больше занос. */
-  carGrip: number
-  /** Потеря хода в заносе, 1/с. 0 — скорость в повороте не падает вовсе. */
-  carTurnDrag: number
-  /** Тормоз: доля скорости, снимаемая за секунду. */
-  carBrake: number
-  /**
-   * Бесфрикционные шины на время езды: иначе момент трения о днище
-   * (≈ 99 Н·м) не даёт рулу провернуть машину (≈ 10 Н·м).
-   */
-  carFrictionlessTires: boolean
+  carTurnRateIdle: number
+  /** Предел скорости поворота кузова на максимальной скорости, рад/с. */
+  carTurnRateFast: number
 }
 
 export const TUNING: Tuning = {
@@ -121,19 +108,14 @@ export const TUNING: Tuning = {
   stepHopCooldown: 0.45,
   groundSticky: 0.1,
 
-  carMaxSpeed: 22,
-  carMaxReverseSpeed: 8,
-  carEngineAccel: 9,
-  carReverseAccel: 5,
-  carMaxYawRate: 3.5,
-  carSteerResponse: 15,
-  carSteerFalloffSpeed: 30,
-  carMinSteerAuthority: 0.45,
-  carYawDamping: 0.9,
-  carGrip: 3,
-  carTurnDrag: 0.3,
-  carBrake: 6,
-  carFrictionlessTires: true,
+  carMaxSpeed: 15,
+  carMaxReverseSpeed: 6,
+  carAccelRate: 1.7,
+  carBrakeRate: 3.2,
+  carReverseAccelRate: 1.4,
+  carCoastRate: 1.1,
+  carTurnRateIdle: 3.2,
+  carTurnRateFast: 0.9,
 }
 
 // Dev-хук: можно править настройки прямо в консоли браузера, без перезапуска.
