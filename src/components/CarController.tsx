@@ -585,8 +585,74 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
     [cars, respawnCar],
   )
 
-  useFrame((_, delta) => {
-    const dt = carDebug.forceZeroDt ? 0 : Math.min(delta, 1 / 30)
+  /**
+   * Управление машиной — строго в физическом тике.
+   *
+   * `useBeforePhysicsStep` срабатывает ровно перед тем, как Rapier считает
+   * очередной шаг, и всегда с фиксированным шагом (1/60 с), сколько бы шагов
+   * ни ушло на кадр. Команды скорости, выставленные из useFrame, приходили в
+   * произвольный момент рендер-цикла — скорость применялась на шаг позже,
+   * и машина дёргалась на глазах.
+   */
+  useBeforePhysicsStep((world) => {
+    const carState = useCarStore.getState()
+    if (!carState.isDriving || !carState.currentCarId) return
+    const index = indexById.get(carState.currentCarId)
+    if (index === undefined) return
+    // Фиксированный шаг физики. world.timestep выставляется сразу после
+    // колбэка, поэтому здесь значение предыдущего шага — оно то же самое.
+    const dt = carDebug.forceZeroDt ? 0 : world.timestep || 1 / 60
+    drive(index, dt)
+  })
+
+  /**
+   * Состояние кузова — после физического шага.
+   *
+   * Здесь снимается положение машины на «текущем» шаге; предыдущее
+   * сохраняется отдельно. Камера интерполирует между этими двумя точками
+   * и не повторяет ступенчатую физику.
+   */
+  useAfterPhysicsStep(() => {
+    const carState = useCarStore.getState()
+    if (!carState.isDriving || !carState.currentCarId) return
+    const index = indexById.get(carState.currentCarId)
+    if (index === undefined) return
+    const body = bodies.current[index]
+    if (!body) return
+
+    let t: { x: number; y: number; z: number }
+    let rot: { x: number; y: number; z: number; w: number }
+    try {
+      t = body.translation()
+      rot = body.rotation()
+    } catch {
+      return
+    }
+    if (!Number.isFinite(t.x) || !Number.isFinite(t.z)) return
+
+    // Позиция шага: предыдущая и текущая.
+    playerState.carPositionPrev.copy(playerState.carPosition)
+    playerState.carPosition.set(t.x, t.y, t.z)
+    playerState.carStepTime = performance.now()
+    playerState.carStepDuration = 1 / 60
+
+    // Сырое положение — для HUD и мини-карты.
+    playerState.position.set(t.x, t.y, t.z)
+
+    // Курс машины — камера по нему возвращается за кузов.
+    carQuaternion.set(rot.x, rot.y, rot.z, rot.w)
+    carForward.set(0, 0, 1).applyQuaternion(carQuaternion)
+    carForward.y = 0
+    if (carForward.lengthSq() < 1e-6) carForward.set(0, 0, 1)
+    carForward.normalize()
+    playerState.carYaw = Math.atan2(carForward.x, carForward.z)
+    playerState.carForward.copy(carForward)
+    // Насколько кузов перевёрнут: «вверх» машины в мировых координатах.
+    carUp.copy(UP).applyQuaternion(carQuaternion)
+    playerState.carUpY = carUp.y
+  })
+
+  useFrame(() => {
     const input = useInputStore.getState()
     const pressedF = input.consumePress('KeyF')
 
@@ -598,7 +664,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
         : -1
 
     if (drivingIndex >= 0) {
-      drive(drivingIndex, dt)
+      // Само управление — в физическом тике, здесь только вход/выход.
       setCarPrompt('Нажми F, чтобы выйти')
       carDebug.isDriving = true
       carDebug.currentCarId = carState.currentCarId

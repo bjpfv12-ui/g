@@ -73,6 +73,7 @@ const PROBES: Array<[number, number]> = [
 ]
 
 const target = new THREE.Vector3()
+const carPos = new THREE.Vector3()
 const lookPoint = new THREE.Vector3()
 const desired = new THREE.Vector3()
 const offset = new THREE.Vector3()
@@ -170,14 +171,27 @@ export function CameraFollow() {
 
     if (driving) {
       // Ось «пружины» — центр машины. Камера висит на 6 м позади и 3 м выше.
-      target.copy(playerState.position)
+      //
+      // Положение машины интерполируется между двумя последними шагами
+      // физики: сама физика ступенчатая (1/60 с), и без интерполяции камера
+      // дёргалась бы вслед за каждым шагом.
+      const alpha = THREE.MathUtils.clamp(
+        (performance.now() - playerState.carStepTime) /
+          (playerState.carStepDuration * 1000),
+        0,
+        1,
+      )
+      carPos.lerpVectors(
+        playerState.carPositionPrev,
+        playerState.carPosition,
+        alpha,
+      )
+      target.copy(carPos)
 
       // Взгляд — не строго в корму: точка смещена вперёд по курсу машины,
       // поэтому дорога видна заранее, а машина сидит в кадре по центру снизу.
-      lookPoint
-        .copy(playerState.position)
-        .addScaledVector(playerState.carForward, CAR_LOOKAHEAD)
-      lookPoint.y = playerState.position.y + CAR_LOOK_HEIGHT
+      lookPoint.copy(carPos).addScaledVector(playerState.carForward, CAR_LOOKAHEAD)
+      lookPoint.y = carPos.y + CAR_LOOK_HEIGHT
     } else {
       // ─── Цель — чуть выше головы ───────────────────────────────────────────
       target.set(
