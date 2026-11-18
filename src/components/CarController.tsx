@@ -523,7 +523,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
           TUNING.carTurnRateFast,
           speedFactor,
         )
-        body.setAngvel({ x: 0, y: -steer * turnRate, z: 0 }, true)
+        body.setAngvel({ x: 0, y: steer * turnRate, z: 0 }, true)
       }
 
       // Фактическая угловая скорость после выставления — для телеметрии.
@@ -539,7 +539,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
       }
 
       if (import.meta.env.DEV) {
-        carDebug.steer.target = -steer * turnRate
+        carDebug.steer.target = steer * turnRate
         carDebug.steer.actual = actualYawRate
         carDebug.steer.limit = turnRate
         carDebug.steer.authority = 1 - speedFactorOf(driveSpeed.current)
@@ -572,7 +572,7 @@ export function CarController({ config = DEFAULT_CITY }: { config?: CityConfig }
           t: performance.now(),
           steer,
           forwardSpeed: driveSpeed.current,
-          target: -steer * turnRate,
+          target: steer * turnRate,
           yaw: playerState.carYaw,
           turnForce: 0,
           angvel: actualYawRate,
