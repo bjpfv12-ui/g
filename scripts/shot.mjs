@@ -36,75 +36,7 @@ await page.addStyleTag({ content: '.hud__overlay{display:none !important}' })
 await new Promise((r) => setTimeout(r, 4000))
 
 if (process.env.CAR === '1') {
-  // Садимся в машину и снимаем поворот — нужен dev-сервер с хуками.
-  const parked = await page.evaluate(() => window.__carState?.parked ?? [])
-  // Берём машину ближе к центру города, чтобы не уехать за карту.
-  const target = await page.evaluate((list) => {
-    let best = list[0]
-    let bestD = Infinity
-    for (const c of list) {
-      const d = Math.hypot(c.x, c.z)
-      if (d < bestD) {
-        bestD = d
-        best = c
-      }
-    }
-    return best
-  }, parked)
-  await page.evaluate((t) => {
-    window.__playerState.body.setTranslation({ x: t.x + 1.2, y: 1.2, z: t.z }, true)
-  }, target)
-  await new Promise((r) => setTimeout(r, 800))
-  await page.keyboard.press('KeyF')
-  await new Promise((r) => setTimeout(r, 600))
-
-  await page.keyboard.down('KeyW')
-  await new Promise((r) => setTimeout(r, 1400))
-  await page.keyboard.down('KeyA')
-  await new Promise((r) => setTimeout(r, 700))
-  await page.keyboard.up('KeyA')
-  await page.keyboard.up('KeyW')
-  // Тормоз, чтобы машина точно стояла в кадре.
-  await page.keyboard.down('Space')
-  await new Promise((r) => setTimeout(r, 1200))
-  await page.keyboard.up('Space')
-  await new Promise((r) => setTimeout(r, 300))
-
-  const camInfo = await page.evaluate(() => {
-    const p = window.__playerState
-    const cam = window.__camera
-    return {
-      dist: cam ? cam.position.distanceTo(p.position) : -1,
-      carYaw: p.carYaw,
-      speed: p.carForwardSpeed,
-    }
-  })
-  console.log('камера до кузова:', camInfo.dist.toFixed(2), 'м | курс', camInfo.carYaw.toFixed(2))
-
-  // Свободная камера: смотрим на машину сбоку и сверху, чтобы оценить кузов.
-  if (process.env.FREE === '1') {
-    await page.evaluate(() => {
-      const p = window.__playerState.position
-      window.__freeCam = {
-        pos: [p.x + 7, p.y + 4, p.z + 7],
-        look: [p.x, p.y, p.z],
-      }
-    })
-    await new Promise((r) => setTimeout(r, 600))
-    await page.screenshot({ path: OUT })
-    await page.evaluate(() => {
-      window.__freeCam = undefined
-    })
-  } else {
-    // Обычная игровая камера — вид от третьего лица за рулём.
-    await page.keyboard.down('KeyW')
-    await new Promise((r) => setTimeout(r, 900))
-    await page.keyboard.down('KeyA')
-    await new Promise((r) => setTimeout(r, 500))
-    await page.screenshot({ path: OUT })
-    await page.keyboard.up('KeyA')
-    await page.keyboard.up('KeyW')
-  }
+  console.log('ветка CAR=1 удалена вместе со старым управлением машиной')
 } else {
   // Доворачиваем персонажа клавишей D — видно, что камера встаёт за спину.
   await page.keyboard.down('KeyW')

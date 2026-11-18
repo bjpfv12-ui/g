@@ -62,48 +62,6 @@ export interface Tuning {
   stepHopCooldown: number
   /** Сколько секунд после касания земля считается «под ногами», с. */
   groundSticky: number
-
-  // ── Машина: аркадное управление ───────────────────────────────────────────
-  /** Максимальная скорость вперёд, м/с. */
-  carMaxSpeed: number
-  /** Максимальная скорость заднего хода, м/с. */
-  carMaxReverseSpeed: number
-  /**
-   * Скорость разгона вперёд, 1/с. Скорость подтягивается к цели
-   * экспоненциально: v += (цель − v)·(1 − e^(−k·dt)).
-   */
-  carAccelRate: number
-  /** Скорость торможения газом (S на ходу вперёд), 1/с. */
-  carBrakeRate: number
-  /** Скорость разгона назад, 1/с. */
-  carReverseAccelRate: number
-  /** Скорость сброса скорости на холостом ходу (накат), 1/с. */
-  carCoastRate: number
-  /**
-   * Скорость подстройки команды под фактическую скорость при контакте
-   * с препятствием, 1/с. Без неё машина давит в стену на полной мощности.
-   */
-  carBlockRate: number
-  /**
-   * Базовая скорость поворота кузова, рад/с. Это полная мощность руля —
-   * на месте, на холостом ходу.
-   */
-  carTurnRateBase: number
-  /**
-   * Минимальная доля мощности руля на максимальной скорости.
-   * 0.7 — на полной скорости руль держит 70 % от базовой.
-   */
-  carTurnRateFloor: number
-  /**
-   * Мягкость спада мощности руля по скорости, 1/(м/с).
-   * Чем меньше — тем дольше руль держит базовую мощность на скорости.
-   */
-  carTurnRateFalloffK: number
-  /**
-   * Бесфрикционные шины на время езды: контакт с асфальтом гасит вращение
-   * кузова, и руль на месте доворачивает вдвое медленнее, чем задано.
-   */
-  carFrictionlessTires: boolean
 }
 
 export const TUNING: Tuning = {
@@ -128,18 +86,6 @@ export const TUNING: Tuning = {
   stepLookAhead: 0.7,
   stepHopCooldown: 0.45,
   groundSticky: 0.1,
-
-  carMaxSpeed: 30,
-  carMaxReverseSpeed: 12,
-  carAccelRate: 3.4,
-  carBrakeRate: 6.4,
-  carReverseAccelRate: 2.8,
-  carCoastRate: 3.2,
-  carBlockRate: 12,
-  carTurnRateBase: 4.8,
-  carTurnRateFloor: 0.7,
-  carTurnRateFalloffK: 0.1,
-  carFrictionlessTires: true,
 }
 
 // Dev-хук: можно править настройки прямо в консоли браузера, без перезапуска.

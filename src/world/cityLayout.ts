@@ -55,7 +55,7 @@ export interface CityData {
   treeCanopies: BoxDef[]
   palmTrunks: BoxDef[]
   palmFronds: BoxDef[]
-  /** Припаркованные машины — их рендерит и физику ведёт CarController. */
+  /** Припаркованные машины — их рисует и ставит в физику ParkedCars. */
   parkedCars: ParkedCarDef[]
   yellowMarks: BoxDef[]
   whiteMarks: BoxDef[]

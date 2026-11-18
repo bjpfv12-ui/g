@@ -4,7 +4,6 @@ import { useFrame } from '@react-three/fiber'
 import { RigidBody, useRapier, CapsuleCollider, type RapierRigidBody } from '@react-three/rapier'
 import { useInputStore } from '../store/InputStore'
 import { useCameraStore } from '../store/CameraStore'
-import { useCarStore } from '../store/CarStore'
 import { playerState } from '../state/playerState'
 import { PLAYER_HEIGHT } from '../world/cityConfig'
 import { TUNING } from '../tuning'
@@ -68,14 +67,6 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
     if (!rb) return
     playerState.body = rb
     const dt = Math.min(delta, 1 / 30)
-
-    // ─── За рулём персонаж отключён ─────────────────────────────────────────
-    // Управляет машина (CarController), она же пишет позицию и скорость.
-    if (useCarStore.getState().isDriving) {
-      if (visual.current) visual.current.visible = false
-      return
-    }
-    if (visual.current) visual.current.visible = true
 
     const input = useInputStore.getState()
     const keys = input.keys
