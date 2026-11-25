@@ -14,6 +14,7 @@ import { Clouds } from './components/Clouds'
 import { DayNight } from './components/DayNight'
 import { PostFX } from './components/PostFX'
 import { Hud } from './components/Hud'
+import { TouchControls } from './components/TouchControls'
 import { releaseAllKeys, useInputStore } from './store/InputStore'
 import { DEFAULT_CITY } from './world/cityConfig'
 import { getSpawnPoint } from './world/cityLayout'
@@ -100,6 +101,8 @@ export default function App() {
   }, [])
 
   const requestLock = () => {
+    // На телефоне захват мыши не поддерживается: обзор ведёт палец.
+    if (useInputStore.getState().touch) return
     const canvas = containerRef.current?.querySelector('canvas')
     if (canvas && document.pointerLockElement !== canvas) {
       canvas.requestPointerLock()
@@ -151,6 +154,7 @@ export default function App() {
       </Canvas>
 
       <Hud />
+      <TouchControls />
     </div>
   )
 }

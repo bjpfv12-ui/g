@@ -44,6 +44,11 @@ export interface Tuning {
   cameraKeyTurnRate: number
   /** Чувствительность мыши. Больше — быстрее поворот камеры. */
   mouseSensitivity: number
+  /**
+   * Чувствительность обзора пальцем, рад/пиксель.
+   * Больше, чем у мыши: палец на телефоне двигается короче и грубее.
+   */
+  touchLookSensitivity: number
   /** Максимальный крен корпуса в повороте, радианы. */
   maxLean: number
 
@@ -77,6 +82,7 @@ export const TUNING: Tuning = {
   bodyTurnResponse: 12,
   cameraKeyTurnRate: 1.9,
   mouseSensitivity: 0.0026,
+  touchLookSensitivity: 0.006,
   maxLean: 0.22,
 
   jumpSpeed: 8.8,

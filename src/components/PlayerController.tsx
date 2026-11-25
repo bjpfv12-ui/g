@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { RigidBody, useRapier, CapsuleCollider, type RapierRigidBody } from '@react-three/rapier'
-import { useInputStore } from '../store/InputStore'
+import { useInputStore, readVirtualMove } from '../store/InputStore'
 import { useCameraStore } from '../store/CameraStore'
 import { playerState } from '../state/playerState'
 import { PLAYER_HEIGHT } from '../world/cityConfig'
@@ -79,6 +79,12 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
     const strafeLeft = !!(keys['KeyA'] || keys['ArrowLeft'])
     const sprint = !!(keys['ShiftLeft'] || keys['ShiftRight'])
 
+    // Виртуальный стик (телефон): ось задаёт направление и силу нажатия.
+    // Клавиши и стик складываются — на ноутбуке с тач-экраном можно и так, и так.
+    const stick = readVirtualMove()
+    const stickForward = stick.active ? stick.y : 0
+    const stickStrafe = stick.active ? stick.x : 0
+
     const position = rb.translation()
     const velocity = rb.linvel()
 
@@ -93,8 +99,12 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
     let forward = 0
 
     if (bodyMode) {
-      if (forwardInput !== backwardInput) {
-        forward = forwardInput ? 1 : -1
+      // Ход по курсу корпуса: стик задаёт величину, клавиши — полный шаг.
+      let bodyForward = 0
+      if (forwardInput !== backwardInput) bodyForward = forwardInput ? 1 : -1
+      else if (stickForward !== 0) bodyForward = stickForward
+      if (bodyForward !== 0) {
+        forward = bodyForward
         const sinH = Math.sin(facing.current)
         const cosH = Math.cos(facing.current)
         dirX = -sinH * forward
@@ -111,6 +121,20 @@ export function PlayerController({ spawn }: { spawn: [number, number, number] })
       if (len > 0) {
         f /= len
         s /= len
+        // Стик складывается с клавишами и даёт аналоговую скорость:
+        // чем дальше палец от центра, тем быстрее идёт персонаж.
+        f += stickForward
+        s += stickStrafe
+        const total = Math.hypot(f, s)
+        if (total > 1) {
+          f /= total
+          s /= total
+        }
+      } else if (stick.active && (stickForward !== 0 || stickStrafe !== 0)) {
+        f = stickForward
+        s = stickStrafe
+      }
+      if (f !== 0 || s !== 0) {
         forward = f
         // Вперёд/вбок относительно взгляда камеры, а не мировых осей.
         dirX = -Math.sin(camYaw) * f + Math.cos(camYaw) * s

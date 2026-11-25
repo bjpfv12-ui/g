@@ -206,6 +206,8 @@ export function Doors({ config = DEFAULT_CITY }: { config?: CityConfig }) {
     const dt = Math.min(delta, 1 / 30)
     const input = useInputStore.getState()
     const press = input.consumePress('KeyE')
+    // На телефоне подсказка говорит про кнопку, а не про клавишу.
+    const touch = input.touch
 
     const px = playerState.position.x
     const pz = playerState.position.z
@@ -230,7 +232,15 @@ export function Doors({ config = DEFAULT_CITY }: { config?: CityConfig }) {
     }
 
     setDoorPrompt(
-      nearest ? (nearest.open ? 'E — закрыть дверь' : 'E — открыть дверь') : null,
+      nearest
+        ? nearest.open
+          ? touch
+            ? 'Закрыть дверь'
+            : 'E — закрыть дверь'
+          : touch
+            ? 'Открыть дверь'
+            : 'E — открыть дверь'
+        : null,
     )
 
     for (let i = 0; i < doors.length; i++) {

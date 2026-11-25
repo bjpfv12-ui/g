@@ -308,3 +308,272 @@ body {
   letter-spacing: 0.2em;
   text-transform: uppercase;
 }
+
+/* ─── Экранное управление (телефон) ──────────────────────────────────────── */
+
+.touch {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  /* Чтобы жесты по экрану не прокручивали страницу и не зумили её. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Зона обзора: свайп ведёт камеру. Занимает весь экран под стиком и кнопками. */
+.touch__look {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* ─── Стик движения ─────────────────────────────────────────────────────── */
+
+.touch__stick {
+  position: absolute;
+  left: max(26px, env(safe-area-inset-left));
+  bottom: max(26px, env(safe-area-inset-bottom));
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(27, 21, 18, 0.5),
+    rgba(27, 21, 18, 0.24)
+  );
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch__stickKnob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 176, 102, 0.28);
+  border: 1px solid var(--accent-dim);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+/* ─── Кнопки действий ────────────────────────────────────────────────────── */
+
+.touch__buttons {
+  position: absolute;
+  right: max(22px, env(safe-area-inset-right));
+  bottom: max(26px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 12px;
+  align-items: end;
+  justify-items: end;
+  pointer-events: none;
+}
+
+.touch__button {
+  pointer-events: auto;
+  touch-action: none;
+  min-width: 66px;
+  height: 66px;
+  padding: 0 12px;
+  border-radius: 50%;
+  border: 1px solid var(--accent-dim);
+  background: rgba(27, 21, 18, 0.62);
+  backdrop-filter: blur(6px);
+  color: var(--paper);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  transition: transform 0.08s ease, background 0.08s ease;
+}
+
+.touch__button:active {
+  transform: scale(0.92);
+  background: rgba(255, 176, 102, 0.34);
+}
+
+/* Прыжок — главная кнопка, поэтому крупнее остальных. */
+.touch__button--jump {
+  width: 84px;
+  height: 84px;
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 12px;
+  background: rgba(255, 176, 102, 0.24);
+}
+
+/* ─── Телефон: HUD компактнее, чтобы не спорить с управлением ───────────── */
+
+@media (max-width: 820px), (pointer: coarse) {
+  .hud__brand {
+    top: max(12px, env(safe-area-inset-top));
+    left: max(14px, env(safe-area-inset-left));
+    /* Заголовок ужимается: иначе налезает на панель телеметрии. */
+    gap: 2px;
+  }
+
+  .hud__title {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+  }
+
+  .hud__subtitle {
+    display: none;
+  }
+
+  .hud__telemetry {
+    top: max(12px, env(safe-area-inset-top));
+    right: max(14px, env(safe-area-inset-right));
+    gap: 9px;
+    padding: 6px 9px;
+    font-size: 9px;
+  }
+
+  .hud__key {
+    min-width: 11px;
+    margin-right: 4px;
+  }
+
+  /* Мини-карта уезжает наверх: внизу теперь стик и кнопки. */
+  .hud__map {
+    top: max(74px, calc(env(safe-area-inset-top) + 68px));
+    bottom: auto;
+    right: max(14px, env(safe-area-inset-right));
+  }
+
+  .minimap {
+    width: 116px !important;
+    height: 116px !important;
+  }
+
+  .hud__gauge {
+    min-width: 74px;
+    padding: 6px 10px;
+  }
+
+  .hud__gaugeValue {
+    font-size: 15px;
+  }
+
+  .hud__mapLegend {
+    display: none;
+  }
+
+  /* Легенда управления прячется: на тач-экране подсказки на экране. */
+  .hud__controls {
+    display: none;
+  }
+
+  .hud__prompt {
+    bottom: max(178px, calc(env(safe-area-inset-bottom) + 170px));
+    font-size: 11px;
+  }
+}
+
+/* Узкий экран в портретной ориентации — стик и кнопки ближе к краям. */
+@media (max-width: 480px) {
+  .touch__stick {
+    width: 116px;
+    height: 116px;
+    left: max(16px, env(safe-area-inset-left));
+  }
+
+  .touch__stickKnob {
+    width: 52px;
+    height: 52px;
+  }
+
+  .touch__button {
+    min-width: 58px;
+    height: 58px;
+    font-size: 10px;
+  }
+
+  .touch__button--jump {
+    width: 74px;
+    height: 74px;
+  }
+}
+
+/* Альбомная ориентация: кнопки в один ряд у нижнего края — иначе они
+   налезают на мини-карту, которая в альбоме стоит в правом верхнем углу. */
+@media (pointer: coarse) and (orientation: landscape) {
+  .touch__buttons {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 14px;
+  }
+
+  .touch__button--jump {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
+/* ─── Подсказка «поверните телефон» ─────────────────────────────────────── */
+
+/*
+ * Показывается только в портретной ориентации на тач-устройстве:
+ * в портрете горизонт обрезан, а стик с кнопками закрывают пол-экрана.
+ */
+.hud__rotate {
+  display: none;
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+  .hud__rotate {
+    position: absolute;
+    /* Плашка встаёт под заголовок в левом углу: в центре сверху она налезала на часы. */
+    left: max(14px, env(safe-area-inset-left));
+    top: max(44px, calc(env(safe-area-inset-top) + 40px));
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 132px;
+    padding: 8px 12px;
+    border: 1px solid var(--accent-dim);
+    border-radius: 12px;
+    background: rgba(24, 18, 15, 0.86);
+    backdrop-filter: blur(10px);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: left;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+    animation: hud__rotatePulse 2.4s ease-in-out infinite;
+  }
+
+  /* Стрелка-подсказка поворота. */
+  .hud__rotate::before {
+    content: '⟳';
+    flex: none;
+    font-size: 18px;
+    line-height: 1;
+  }
+}
+
+@keyframes hud__rotatePulse {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}

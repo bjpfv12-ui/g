@@ -10,6 +10,7 @@ import { Speedometer } from './Speedometer'
 /** Живой HUD: координаты и скорость обновляются раз в 100 мс, без ре-рендера сцены. */
 export function Hud() {
   const pointerLocked = useInputStore((state) => state.pointerLocked)
+  const touch = useInputStore((state) => state.touch)
   const doorPrompt = useUiStore((state) => state.doorPrompt)
   const [telemetry, setTelemetry] = useState({
     x: 0,
@@ -53,27 +54,49 @@ export function Hud() {
       </div>
 
       <div className="hud__controls">
-        <span>
-          <b>W/S</b> движение
-        </span>
-        <span>
-          <b>A/D</b> {TUNING.controlMode === 'body' ? 'поворот' : 'шаг вбок'}
-        </span>
-        <span>
-          <b>Shift</b> бег
-        </span>
-        <span>
-          <b>Space</b> прыжок
-        </span>
-        <span>
-          <b>E</b> дверь
-        </span>
-        <span>
-          <b>Мышь</b> камера
-        </span>
-        <span>
-          <b>Esc</b> пауза
-        </span>
+        {touch ? (
+          <>
+            <span>
+              <b>Стик</b> идти
+            </span>
+            <span>
+              <b>Свайп</b> обзор
+            </span>
+            <span>
+              <b>Бег</b> ускорение
+            </span>
+            <span>
+              <b>Прыжок</b> прыгнуть
+            </span>
+            <span>
+              <b>Дверь</b> открыть
+            </span>
+          </>
+        ) : (
+          <>
+            <span>
+              <b>W/S</b> движение
+            </span>
+            <span>
+              <b>A/D</b> {TUNING.controlMode === 'body' ? 'поворот' : 'шаг вбок'}
+            </span>
+            <span>
+              <b>Shift</b> бег
+            </span>
+            <span>
+              <b>Space</b> прыжок
+            </span>
+            <span>
+              <b>E</b> дверь
+            </span>
+            <span>
+              <b>Мышь</b> камера
+            </span>
+            <span>
+              <b>Esc</b> пауза
+            </span>
+          </>
+        )}
       </div>
 
       <div className="hud__map">
@@ -91,7 +114,8 @@ export function Hud() {
 
       {doorPrompt ? <div className="hud__prompt">{doorPrompt}</div> : null}
 
-      {!pointerLocked && (
+      {/* На телефоне захвата мыши нет: оверлей с «кликните» только мешал бы. */}
+      {!pointerLocked && !touch && (
         <div className="hud__overlay">
           <div className="hud__overlayCard">
             <h1>Sunset District</h1>
@@ -109,6 +133,9 @@ export function Hud() {
           </div>
         </div>
       )}
+
+      {/* Портрет на телефоне: город виден плохо — просим повернуть устройство. */}
+      {touch && <div className="hud__rotate">Поверните телефон</div>}
     </div>
   )
 }
